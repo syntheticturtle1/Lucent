@@ -89,4 +89,62 @@ public final class InputController: @unchecked Sendable {
     public func triggerSpotlight() {
         pressKey(keyCode: 0x31, modifiers: .maskCommand)
     }
+
+    // MARK: - Drag Operations
+
+    /// Begin a click-and-drag at the given point (posts mouseDown).
+    public func startDrag(at point: GazePoint) {
+        let cgPoint = CGPoint(x: point.x, y: point.y)
+        if let down = CGEvent(mouseEventSource: eventSource, mouseType: .leftMouseDown, mouseCursorPosition: cgPoint, mouseButton: .left) {
+            down.post(tap: .cghidEventTap)
+        }
+    }
+
+    /// End a click-and-drag at the given point (posts mouseUp).
+    public func endDrag(at point: GazePoint) {
+        let cgPoint = CGPoint(x: point.x, y: point.y)
+        if let up = CGEvent(mouseEventSource: eventSource, mouseType: .leftMouseUp, mouseCursorPosition: cgPoint, mouseButton: .left) {
+            up.post(tap: .cghidEventTap)
+        }
+    }
+
+    /// Move the cursor during a drag (posts leftMouseDragged).
+    public func dragMove(to point: GazePoint) {
+        let cgPoint = CGPoint(x: point.x, y: point.y)
+        if let event = CGEvent(mouseEventSource: eventSource, mouseType: .leftMouseDragged, mouseCursorPosition: cgPoint, mouseButton: .left) {
+            event.post(tap: .cghidEventTap)
+        }
+    }
+
+    // MARK: - Desktop Switching
+
+    /// Switch desktop in the given direction using Ctrl+Arrow.
+    public func switchDesktop(direction: SwipeDirection) {
+        switch direction {
+        case .left:  pressKey(keyCode: 0x7B, modifiers: .maskControl)  // Ctrl+Left
+        case .right: pressKey(keyCode: 0x7C, modifiers: .maskControl)  // Ctrl+Right
+        case .up:    break  // Handled by triggerMissionControl
+        case .down:  break  // Handled by triggerExpose
+        }
+    }
+
+    /// Trigger Mission Control (Ctrl+Up arrow).
+    public func triggerMissionControl() {
+        pressKey(keyCode: 0x7E, modifiers: .maskControl)
+    }
+
+    /// Trigger App Expose (Ctrl+Down arrow).
+    public func triggerExpose() {
+        pressKey(keyCode: 0x7D, modifiers: .maskControl)
+    }
+
+    // MARK: - Zoom
+
+    /// Zoom in or out using Cmd+Plus or Cmd+Minus.
+    public func zoom(direction: ZoomDirection) {
+        switch direction {
+        case .zoomIn:  pressKey(keyCode: 0x18, modifiers: .maskCommand)  // Cmd+= (plus)
+        case .zoomOut: pressKey(keyCode: 0x1B, modifiers: .maskCommand)  // Cmd+- (minus)
+        }
+    }
 }
