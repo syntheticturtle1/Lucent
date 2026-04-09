@@ -6,6 +6,9 @@ struct HUDExpandedView: View {
     let confidence: Float
     let expressions: [DetectedExpression]
     let cursorPosition: GazePoint
+    let handCount: Int
+    let activeGesture: GestureType?
+    let handGesturesEnabled: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -27,6 +30,17 @@ struct HUDExpandedView: View {
                         Spacer()
                         Text("\(Int(expr.confidence * 100))%").font(.system(size: 10)).foregroundColor(.secondary)
                     }
+                }
+            }
+            Divider().opacity(0.3)
+            HStack {
+                Image(systemName: "hand.raised").font(.system(size: 12))
+                Text("Hands: \(handCount)").font(.system(size: 11))
+                Spacer()
+                if let gesture = activeGesture {
+                    Text(gesture.rawValue).font(.system(size: 10, design: .monospaced)).foregroundColor(.blue)
+                } else {
+                    Text(handGesturesEnabled ? "Listening" : "Paused").font(.system(size: 10)).foregroundColor(.secondary)
                 }
             }
             Divider().opacity(0.3)

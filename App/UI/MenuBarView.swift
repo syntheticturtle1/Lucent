@@ -23,6 +23,9 @@ struct MenuBarView: View {
             Toggle("Show HUD", isOn: Binding(
                 get: { appState.showHUD },
                 set: { appState.showHUD = $0; UserDefaults.standard.set($0, forKey: "showHUD") }))
+            Toggle("Hand Gestures", isOn: Binding(
+                get: { appState.handGesturesEnabled },
+                set: { _ in appState.toggleHandGestures() }))
             Button("Quick Recalibrate") { appState.showCalibration = true }
                 .disabled(!appState.pipeline.isEnabled)
             Divider()
