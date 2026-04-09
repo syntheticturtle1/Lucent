@@ -93,7 +93,7 @@ public struct GestureEvent: Sendable, Equatable {
 
 // MARK: - Gesture Configuration
 
-public struct GestureConfig: Codable, Sendable {
+public struct GestureConfig: Codable, Sendable, Equatable {
     public var swipeDisplacementX: Double
     public var swipeDisplacementY: Double
     public var swipeWindowSeconds: Double

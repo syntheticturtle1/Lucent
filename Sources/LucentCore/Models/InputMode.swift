@@ -28,7 +28,7 @@ public struct DetectedExpression: Sendable, Equatable {
     }
 }
 
-public struct ExpressionConfig: Codable, Sendable {
+public struct ExpressionConfig: Codable, Sendable, Equatable {
     public var holdDuration: Double
     public var cooldown: Double
     public var thresholdMultiplier: Double
