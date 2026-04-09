@@ -6,9 +6,38 @@ public final class InputModeManager: @unchecked Sendable {
 
     public init() {}
 
+    /// Toggle keyboard mode on/off. Called from Cmd+Shift+K hotkey handler.
+    public func toggleKeyboardMode() -> [ModeEvent] {
+        if currentMode == .keyboard {
+            let previous = currentMode
+            currentMode = .normal
+            return [.modeChanged(from: previous, to: .normal)]
+        } else if currentMode == .normal {
+            let previous = currentMode
+            currentMode = .keyboard
+            return [.modeChanged(from: previous, to: .keyboard)]
+        }
+        // Can only enter keyboard mode from normal mode
+        return []
+    }
+
     public func process(expressions: [DetectedExpression]) -> [ModeEvent] {
         var events: [ModeEvent] = []
         let types = Set(expressions.map(\.type))
+
+        // In keyboard mode, suppress expression-based mode changes
+        // but still allow wink actions to pass through
+        if currentMode == .keyboard {
+            for expression in expressions {
+                switch expression.type {
+                case .winkLeft, .winkRight:
+                    events.append(.actionTriggered(expression.type))
+                default:
+                    break  // Suppress scroll, dictation, command palette triggers
+                }
+            }
+            return events
+        }
 
         // Scroll: hold-to-activate, release to deactivate
         if currentMode == .scroll && !types.contains(.mouthOpen) {
