@@ -13,6 +13,7 @@ public final class AppState: ObservableObject {
     @Published public var hasCompletedOnboarding: Bool
     @Published public var showHUD: Bool
     @Published public var hudExpanded: Bool
+    @Published public var handGesturesEnabled: Bool
 
     private var hotkeyRef: EventHotKeyRef?
     private var hudHotkeyRef: EventHotKeyRef?
@@ -21,6 +22,7 @@ public final class AppState: ObservableObject {
         self.hasCompletedOnboarding = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
         self.showHUD = UserDefaults.standard.object(forKey: "showHUD") as? Bool ?? true
         self.hudExpanded = UserDefaults.standard.bool(forKey: "hudExpanded")
+        self.handGesturesEnabled = UserDefaults.standard.object(forKey: "handGesturesEnabled") as? Bool ?? true
         registerGlobalHotkeys()
     }
 
@@ -36,6 +38,12 @@ public final class AppState: ObservableObject {
     public func toggleHUDExpanded() {
         hudExpanded.toggle()
         UserDefaults.standard.set(hudExpanded, forKey: "hudExpanded")
+    }
+
+    public func toggleHandGestures() {
+        handGesturesEnabled.toggle()
+        pipeline.handGesturesEnabled = handGesturesEnabled
+        UserDefaults.standard.set(handGesturesEnabled, forKey: "handGesturesEnabled")
     }
 
     public var launchAtLogin: Bool {
