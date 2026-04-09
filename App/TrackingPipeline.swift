@@ -27,11 +27,11 @@ public final class TrackingPipeline: ObservableObject {
 
     private let cameraManager = CameraManager()
     private let frameProcessor: FrameProcessor
-    private let blinkDetector = BlinkDetector()
-    private let cursorSmoother: CursorSmoother
+    let blinkDetector = BlinkDetector()
+    private(set) var cursorSmoother: CursorSmoother
     private let inputController = InputController()
     private let modeManager = InputModeManager()
-    private let headTiltProcessor = HeadTiltProcessor()
+    let headTiltProcessor = HeadTiltProcessor()
     private var calibrationProfile: CalibrationProfile?
 
     // Keyboard mode components
@@ -80,6 +80,17 @@ public final class TrackingPipeline: ObservableObject {
         self.calibrationProfile = profile
         try? profile.save()
         if isEnabled { trackingState = .tracking }
+    }
+
+    /// Apply all settings from a UserProfile to every pipeline component.
+    public func applySettings(from settingsManager: SettingsManager) {
+        settingsManager.apply(to: blinkDetector)
+        settingsManager.apply(to: frameProcessor.expressionDetector)
+        settingsManager.apply(to: frameProcessor.gestureRecognizer)
+        settingsManager.apply(to: tapDetector)
+        settingsManager.apply(to: headTiltProcessor)
+        cursorSmoother = settingsManager.makeCursorSmoother()
+        handGesturesEnabled = settingsManager.currentProfile.handGesturesEnabled
     }
 
     // MARK: - Keyboard Mode

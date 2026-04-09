@@ -23,9 +23,9 @@ public final class FrameProcessor: @unchecked Sendable {
 
     private let landmarkDetector = FaceLandmarkDetector()
     private let gazeEstimator: any GazeEstimating
-    private let expressionDetector = ExpressionDetector()
+    public let expressionDetector = ExpressionDetector()
     private let handDetector = HandDetector()
-    private let gestureRecognizer = GestureRecognizer()
+    public let gestureRecognizer = GestureRecognizer()
 
     public init(gazeEstimator: any GazeEstimating) {
         self.gazeEstimator = gazeEstimator
