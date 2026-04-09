@@ -158,18 +158,10 @@ public final class CursorSmoother {
             state[i] += K[i][0] * iy + K[i][1] * iz
         }
 
-        // Covariance update P = (I - K*H) * P
-        // K*H is 4x4; only first 2 cols of H are non-zero
-        var newP = P
-        for i in 0..<4 {
-            for j in 0..<4 {
-                let kh_ij = K[i][0] * (j == 0 ? 1.0 : 0.0) + K[i][1] * (j == 1 ? 1.0 : 0.0)
-                newP[i][j] = (i == j ? 1.0 : 0.0) * P[i][j] - kh_ij * P[i][j]
-            }
-        }
-        // Correct formula: newP[i][j] = sum_k (delta_ik - K[i][0]*H[0][k] - K[i][1]*H[1][k]) * P[k][j]
-        // H[0][k] = 1 if k==0, H[1][k] = 1 if k==1
-        var newP2 = Array(repeating: Array(repeating: 0.0, count: 4), count: 4)
+        // Covariance update: P = (I - K*H) * P
+        // newP[i][j] = sum_k (delta_ik - K[i][0]*H[0][k] - K[i][1]*H[1][k]) * P[k][j]
+        // H[0][k] = 1 iff k==0, H[1][k] = 1 iff k==1
+        var newP = Array(repeating: Array(repeating: 0.0, count: 4), count: 4)
         for i in 0..<4 {
             for j in 0..<4 {
                 var sum = 0.0
@@ -178,10 +170,10 @@ public final class CursorSmoother {
                     let khFactor = K[i][0] * (k == 0 ? 1.0 : 0.0) + K[i][1] * (k == 1 ? 1.0 : 0.0)
                     sum += (ikFactor - khFactor) * P[k][j]
                 }
-                newP2[i][j] = sum
+                newP[i][j] = sum
             }
         }
-        P = newP2
+        P = newP
     }
 
     // MARK: - Dwell zone
