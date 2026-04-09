@@ -17,11 +17,15 @@ public final class FrameProcessor: @unchecked Sendable {
         public let smileRatio: Double
         public let browHeight: Double
         public let mouthOpenRatio: Double
+        public let hands: [HandData]
+        public let gestures: [GestureEvent]
     }
 
     private let landmarkDetector = FaceLandmarkDetector()
     private let gazeEstimator: any GazeEstimating
     private let expressionDetector = ExpressionDetector()
+    private let handDetector = HandDetector()
+    private let gestureRecognizer = GestureRecognizer()
 
     public init(gazeEstimator: any GazeEstimating) {
         self.gazeEstimator = gazeEstimator
@@ -58,6 +62,22 @@ public final class FrameProcessor: @unchecked Sendable {
             timestamp: timestamp
         )
 
+        // Hand detection + gesture recognition
+        let detectedHands = handDetector.detect(in: pixelBuffer, timestamp: timestamp)
+        var allGestures: [GestureEvent] = []
+
+        if let primaryHand = detectedHands.first {
+            let processed = handDetector.processHandObservation(primaryHand)
+            allGestures = gestureRecognizer.update(
+                hand: processed.handData,
+                velocity: processed.velocity,
+                timestamp: timestamp
+            )
+        } else {
+            allGestures = gestureRecognizer.handleHandLost(timestamp: timestamp)
+            handDetector.reset()
+        }
+
         return FrameResult(
             rawGaze: gaze,
             leftEAR: leftEAR,
@@ -69,7 +89,9 @@ public final class FrameProcessor: @unchecked Sendable {
             headRoll: roll,
             smileRatio: smile,
             browHeight: avgBrowHeight,
-            mouthOpenRatio: mouthOpen
+            mouthOpenRatio: mouthOpen,
+            hands: detectedHands,
+            gestures: allGestures
         )
     }
 }
