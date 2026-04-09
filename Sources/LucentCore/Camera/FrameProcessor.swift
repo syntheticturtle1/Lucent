@@ -1,8 +1,10 @@
+// Sources/LucentCore/Camera/FrameProcessor.swift
 import Foundation
 import CoreGraphics
 import CoreImage
 
 public final class FrameProcessor: @unchecked Sendable {
+
     public struct FrameResult: Sendable {
         public let rawGaze: GazePoint
         public let leftEAR: Double
@@ -10,10 +12,16 @@ public final class FrameProcessor: @unchecked Sendable {
         public let faceDetected: Bool
         public let confidence: Float
         public let timestamp: Double
+        public let expressions: [DetectedExpression]
+        public let headRoll: Double
+        public let smileRatio: Double
+        public let browHeight: Double
+        public let mouthOpenRatio: Double
     }
 
     private let landmarkDetector = FaceLandmarkDetector()
     private let gazeEstimator: any GazeEstimating
+    private let expressionDetector = ExpressionDetector()
 
     public init(gazeEstimator: any GazeEstimating) {
         self.gazeEstimator = gazeEstimator
@@ -21,9 +29,47 @@ public final class FrameProcessor: @unchecked Sendable {
 
     public func process(pixelBuffer: CVPixelBuffer, timestamp: Double) -> FrameResult? {
         guard let face = landmarkDetector.detect(in: pixelBuffer) else { return nil }
-        let gaze = gazeEstimator.estimate(faceBounds: face.faceBounds, leftPupil: face.leftPupil, rightPupil: face.rightPupil)
+
+        let gaze = gazeEstimator.estimate(
+            faceBounds: face.faceBounds,
+            leftPupil: face.leftPupil,
+            rightPupil: face.rightPupil
+        )
+
         let leftEAR = BlinkDetector.computeEAR(eyePoints: face.leftEyePoints)
         let rightEAR = BlinkDetector.computeEAR(eyePoints: face.rightEyePoints)
-        return FrameResult(rawGaze: gaze, leftEAR: leftEAR, rightEAR: rightEAR, faceDetected: true, confidence: face.confidence, timestamp: timestamp)
+
+        // Expression metrics
+        let smile = ExpressionDetector.smileRatio(outerLipsPoints: face.outerLipsPoints)
+        let mouthOpen = ExpressionDetector.mouthOpenRatio(innerLipsPoints: face.innerLipsPoints)
+
+        let leftEyeTopY = face.leftEyePoints.map(\.y).min() ?? 0
+        let rightEyeTopY = face.rightEyePoints.map(\.y).min() ?? 0
+        let leftBrow = ExpressionDetector.browHeight(browPoints: face.leftBrowPoints, eyeTopY: leftEyeTopY)
+        let rightBrow = ExpressionDetector.browHeight(browPoints: face.rightBrowPoints, eyeTopY: rightEyeTopY)
+        let avgBrowHeight = (leftBrow + rightBrow) / 2.0
+
+        let roll = ExpressionDetector.headRoll(leftPupil: face.leftPupil, rightPupil: face.rightPupil)
+
+        let expressions = expressionDetector.update(
+            leftEAR: leftEAR, rightEAR: rightEAR,
+            smileRatio: smile, browHeight: avgBrowHeight,
+            mouthOpenRatio: mouthOpen, headRoll: roll,
+            timestamp: timestamp
+        )
+
+        return FrameResult(
+            rawGaze: gaze,
+            leftEAR: leftEAR,
+            rightEAR: rightEAR,
+            faceDetected: true,
+            confidence: face.confidence,
+            timestamp: timestamp,
+            expressions: expressions,
+            headRoll: roll,
+            smileRatio: smile,
+            browHeight: avgBrowHeight,
+            mouthOpenRatio: mouthOpen
+        )
     }
 }
