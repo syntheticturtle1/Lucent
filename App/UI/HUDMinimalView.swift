@@ -25,7 +25,7 @@ struct HUDMinimalView: View {
     }
 
     private var modeIcon: String {
-        switch mode { case .normal: "eye"; case .scroll: "scroll"; case .dictation: "mic"; case .commandPalette: "magnifyingglass" }
+        switch mode { case .normal: "eye"; case .scroll: "scroll"; case .dictation: "mic"; case .commandPalette: "magnifyingglass"; case .keyboard: "keyboard" }
     }
     private var confidenceColor: Color {
         if confidence > 0.7 { return .green }; if confidence > 0.4 { return .yellow }; return .red

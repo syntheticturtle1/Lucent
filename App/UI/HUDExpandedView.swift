@@ -56,10 +56,10 @@ struct HUDExpandedView: View {
     }
 
     private var modeIcon: String {
-        switch mode { case .normal: "eye"; case .scroll: "scroll"; case .dictation: "mic"; case .commandPalette: "magnifyingglass" }
+        switch mode { case .normal: "eye"; case .scroll: "scroll"; case .dictation: "mic"; case .commandPalette: "magnifyingglass"; case .keyboard: "keyboard" }
     }
     private var modeName: String {
-        switch mode { case .normal: "Normal"; case .scroll: "Scroll"; case .dictation: "Dictation"; case .commandPalette: "Command Palette" }
+        switch mode { case .normal: "Normal"; case .scroll: "Scroll"; case .dictation: "Dictation"; case .commandPalette: "Command Palette"; case .keyboard: "Keyboard" }
     }
     private var confidenceColor: Color {
         if confidence > 0.7 { return .green }; if confidence > 0.4 { return .yellow }; return .red
