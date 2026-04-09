@@ -11,6 +11,8 @@ public final class BlinkDetector: @unchecked Sendable {
 
     // MARK: - Configuration
 
+    public var isEnabled: Bool = true
+
     /// EAR value below which the eye is considered closed.
     public var earThreshold: Double = 0.2
 
@@ -52,6 +54,7 @@ public final class BlinkDetector: @unchecked Sendable {
     ///   - timestamp: Monotonically increasing time in seconds.
     /// - Returns:     Zero or more `ClickEvent` values.
     public func update(ear: Double, timestamp: Double) -> [ClickEvent] {
+        guard isEnabled else { return [] }
         defer {
             previousEAR = ear
             lastTimestamp = timestamp
