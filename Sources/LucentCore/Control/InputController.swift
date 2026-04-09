@@ -53,4 +53,40 @@ public final class InputController: @unchecked Sendable {
             up.post(tap: .cghidEventTap)
         }
     }
+
+    /// Post scroll wheel events.
+    public func scroll(deltaY: Int32, deltaX: Int32 = 0) {
+        if let event = CGEvent(scrollWheelEvent2Source: eventSource,
+                               units: .pixel,
+                               wheelCount: 2,
+                               wheel1: deltaY,
+                               wheel2: deltaX,
+                               wheel3: 0) {
+            event.post(tap: .cghidEventTap)
+        }
+    }
+
+    /// Simulate a key press with optional modifiers.
+    public func pressKey(keyCode: UInt16, modifiers: CGEventFlags = []) {
+        if let down = CGEvent(keyboardEventSource: eventSource, virtualKey: keyCode, keyDown: true),
+           let up = CGEvent(keyboardEventSource: eventSource, virtualKey: keyCode, keyDown: false) {
+            down.flags = modifiers
+            up.flags = modifiers
+            down.post(tap: .cghidEventTap)
+            up.post(tap: .cghidEventTap)
+        }
+    }
+
+    /// Simulate pressing Fn twice (for macOS dictation).
+    public func triggerDictation() {
+        pressKey(keyCode: 0x3F)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [self] in
+            pressKey(keyCode: 0x3F)
+        }
+    }
+
+    /// Simulate Cmd+Space (for Spotlight).
+    public func triggerSpotlight() {
+        pressKey(keyCode: 0x31, modifiers: .maskCommand)
+    }
 }

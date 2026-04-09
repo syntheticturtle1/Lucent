@@ -10,50 +10,45 @@ struct MenuBarView: View {
                 Circle().fill(statusColor).frame(width: 8, height: 8)
                 Text(statusText).font(.headline)
             }
-            .padding(.bottom, 4)
+            if appState.pipeline.currentMode != .normal {
+                HStack(spacing: 4) {
+                    Image(systemName: modeIcon).font(.system(size: 11))
+                    Text(modeName).font(.caption)
+                }.foregroundColor(.blue)
+            }
             Divider()
             Toggle("Eye Tracking", isOn: Binding(
                 get: { appState.pipeline.isEnabled },
-                set: { _ in appState.toggleTracking() }
-            ))
+                set: { _ in appState.toggleTracking() }))
+            Toggle("Show HUD", isOn: Binding(
+                get: { appState.showHUD },
+                set: { appState.showHUD = $0; UserDefaults.standard.set($0, forKey: "showHUD") }))
             Button("Quick Recalibrate") { appState.showCalibration = true }
                 .disabled(!appState.pipeline.isEnabled)
             Divider()
-            Button("Settings...") {
-                appState.showSettings = true
-                NSApp.activate(ignoringOtherApps: true)
-            }
-            .keyboardShortcut(",", modifiers: .command)
+            Button("Settings...") { appState.showSettings = true; NSApp.activate(ignoringOtherApps: true) }
+                .keyboardShortcut(",", modifiers: .command)
             Button("Quit Lucent") { NSApplication.shared.terminate(nil) }
                 .keyboardShortcut("q", modifiers: .command)
-        }
-        .padding(12)
-        .frame(width: 220)
+        }.padding(12).frame(width: 220)
     }
 
     private var statusColor: Color {
         switch appState.pipeline.trackingState {
-        case .tracking: return .green
-        case .detecting: return .yellow
-        case .calibrating: return .blue
-        case .paused: return .red
-        case .idle: return .gray
+        case .tracking: .green; case .detecting: .yellow; case .calibrating: .blue; case .paused: .red; case .idle: .gray
         }
     }
-
     private var statusText: String {
         switch appState.pipeline.trackingState {
-        case .tracking: return "Tracking Active"
-        case .detecting: return "Detecting Face"
-        case .calibrating: return "Calibrating"
-        case .paused(let reason):
-            switch reason {
-            case .faceLost: return "Face Lost"
-            case .poorLighting: return "Poor Lighting"
-            case .cameraDisconnected: return "Camera Disconnected"
-            case .userPaused: return "Paused"
-            }
-        case .idle: return "Idle"
+        case .tracking: "Tracking Active"; case .detecting: "Detecting Face"; case .calibrating: "Calibrating"
+        case .paused(let r): switch r { case .faceLost: "Face Lost"; case .poorLighting: "Poor Lighting"; case .cameraDisconnected: "Camera Disconnected"; case .userPaused: "Paused" }
+        case .idle: "Idle"
         }
+    }
+    private var modeIcon: String {
+        switch appState.pipeline.currentMode { case .normal: "eye"; case .scroll: "scroll"; case .dictation: "mic"; case .commandPalette: "magnifyingglass" }
+    }
+    private var modeName: String {
+        switch appState.pipeline.currentMode { case .normal: "Normal"; case .scroll: "Scroll Mode"; case .dictation: "Dictation"; case .commandPalette: "Command Palette" }
     }
 }
