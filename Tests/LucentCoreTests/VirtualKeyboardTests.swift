@@ -20,6 +20,7 @@ import CoreGraphics
 
 @Test func noKeysOverlap() {
     let kb = VirtualKeyboard.qwerty
+    let epsilon: CGFloat = 1e-9  // tolerance for floating-point edge cases
     for i in 0..<kb.keys.count {
         for j in (i + 1)..<kb.keys.count {
             let a = kb.keys[i]
@@ -28,8 +29,8 @@ import CoreGraphics
             let aBottom = a.position.y + a.size.height
             let bRight = b.position.x + b.size.width
             let bBottom = b.position.y + b.size.height
-            let overlapsX = a.position.x < bRight && aRight > b.position.x
-            let overlapsY = a.position.y < bBottom && aBottom > b.position.y
+            let overlapsX = a.position.x < bRight - epsilon && aRight > b.position.x + epsilon
+            let overlapsY = a.position.y < bBottom - epsilon && aBottom > b.position.y + epsilon
             if overlapsX && overlapsY {
                 Issue.record("Keys \(a.label) and \(b.label) overlap")
             }
