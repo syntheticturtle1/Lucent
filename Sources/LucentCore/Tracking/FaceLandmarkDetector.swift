@@ -1,0 +1,55 @@
+import Foundation
+import Vision
+import CoreGraphics
+
+public struct FaceData: Sendable {
+    public let faceBounds: CGRect
+    public let leftEyePoints: [CGPoint]
+    public let rightEyePoints: [CGPoint]
+    public let leftPupil: CGPoint
+    public let rightPupil: CGPoint
+    public let confidence: Float
+}
+
+public final class FaceLandmarkDetector: @unchecked Sendable {
+    public init() {}
+
+    public func detect(in pixelBuffer: CVPixelBuffer) -> FaceData? {
+        let request = VNDetectFaceLandmarksRequest()
+        request.revision = VNDetectFaceLandmarksRequestRevision3
+        do {
+            let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, options: [:])
+            try handler.perform([request])
+        } catch { return nil }
+
+        guard let face = request.results?.first, let landmarks = face.landmarks else { return nil }
+        guard let leftEye = landmarks.leftEye, let rightEye = landmarks.rightEye,
+              let leftPupil = landmarks.leftPupil, let rightPupil = landmarks.rightPupil else { return nil }
+
+        let imageWidth = CVPixelBufferGetWidth(pixelBuffer)
+        let imageHeight = CVPixelBufferGetHeight(pixelBuffer)
+        let size = CGSize(width: imageWidth, height: imageHeight)
+        let bounds = face.boundingBox
+
+        func convertPoints(_ region: VNFaceLandmarkRegion2D) -> [CGPoint] {
+            let rawPoints = region.pointsInImage(imageSize: size)
+            return (0..<region.pointCount).map { i in
+                let p = rawPoints[i]
+                return CGPoint(x: p.x / CGFloat(imageWidth), y: 1.0 - p.y / CGFloat(imageHeight))
+            }
+        }
+
+        func convertSinglePoint(_ region: VNFaceLandmarkRegion2D) -> CGPoint {
+            convertPoints(region).first ?? .zero
+        }
+
+        return FaceData(
+            faceBounds: CGRect(x: bounds.origin.x, y: 1.0 - bounds.origin.y - bounds.height, width: bounds.width, height: bounds.height),
+            leftEyePoints: convertPoints(leftEye),
+            rightEyePoints: convertPoints(rightEye),
+            leftPupil: convertSinglePoint(leftPupil),
+            rightPupil: convertSinglePoint(rightPupil),
+            confidence: face.confidence
+        )
+    }
+}
