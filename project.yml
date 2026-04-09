@@ -1,0 +1,27 @@
+name: Lucent
+options:
+  bundleIdPrefix: com.lucent
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+
+packages:
+  LucentCore:
+    path: .
+
+targets:
+  Lucent:
+    type: application
+    platform: macOS
+    sources:
+      - path: App
+    dependencies:
+      - package: LucentCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.lucent.app
+        INFOPLIST_FILE: App/Info.plist
+        CODE_SIGN_ENTITLEMENTS: App/Lucent.entitlements
+        CODE_SIGN_IDENTITY: "-"
+        ENABLE_APP_SANDBOX: NO
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
