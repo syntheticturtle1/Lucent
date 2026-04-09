@@ -5,6 +5,7 @@ public enum InputMode: String, Codable, Sendable, CaseIterable {
     case scroll
     case dictation
     case commandPalette
+    case keyboard
 }
 
 public enum ExpressionType: String, Codable, Sendable, CaseIterable {
@@ -50,4 +51,13 @@ public struct ExpressionConfig: Codable, Sendable {
 public enum ModeEvent: Equatable, Sendable {
     case modeChanged(from: InputMode, to: InputMode)
     case actionTriggered(ExpressionType)
+    case keyboardAction(KeyboardActionType)
+}
+
+public enum KeyboardActionType: Equatable, Sendable {
+    case keyTapped(character: String, keyCode: UInt16)
+    case wordCompleted(word: String)
+    case backspace
+    case space
+    case enter
 }

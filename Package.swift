@@ -10,7 +10,8 @@ let package = Package(
     targets: [
         .target(
             name: "LucentCore",
-            path: "Sources/LucentCore"
+            path: "Sources/LucentCore",
+            resources: [.process("Resources")]
         ),
         .testTarget(
             name: "LucentCoreTests",

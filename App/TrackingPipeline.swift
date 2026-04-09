@@ -15,6 +15,13 @@ public final class TrackingPipeline: ObservableObject {
     @Published public var handGesturesEnabled: Bool = true
     @Published public var handCount: Int = 0
 
+    // Keyboard mode state
+    @Published public var keyboardModeActive: Bool = false
+    @Published public var hoveredKey: KeyDefinition? = nil
+    @Published public var currentTypedWord: String = ""
+    @Published public var predictions: [String] = []
+    @Published public var selectedPredictionIndex: Int? = nil
+
     private var isDragging: Bool = false
     private var isPointActive: Bool = false
 
@@ -27,11 +34,22 @@ public final class TrackingPipeline: ObservableObject {
     private let headTiltProcessor = HeadTiltProcessor()
     private var calibrationProfile: CalibrationProfile?
 
+    // Keyboard mode components
+    private let tapDetector = TapDetector()
+    private let keyResolver = KeyResolver()
+    private let predictionEngine = PredictionEngine()
+    private lazy var typingSession: TypingSession = {
+        TypingSession(inputController: inputController, predictionEngine: predictionEngine)
+    }()
+
     private var faceLostTime: Double?
     private let faceLostTimeout: Double = 0.5
     private var lowConfidenceCount = 0
 
     public var cameraDeviceID: String { cameraManager.currentDeviceID ?? "unknown" }
+
+    /// Screen-space frame of the keyboard overlay, set by the UI layer.
+    public var keyboardFrame: CGRect = CGRect(x: 0, y: 0, width: 600, height: 200)
 
     public init() {
         let gazeEstimator = MockGazeEstimator()
@@ -53,6 +71,7 @@ public final class TrackingPipeline: ObservableObject {
         isEnabled = false
         trackingState = .idle
         currentMode = .normal
+        exitKeyboardMode()
     }
 
     public func toggle() throws { if isEnabled { stop() } else { try start() } }
@@ -61,6 +80,36 @@ public final class TrackingPipeline: ObservableObject {
         self.calibrationProfile = profile
         try? profile.save()
         if isEnabled { trackingState = .tracking }
+    }
+
+    // MARK: - Keyboard Mode
+
+    public func toggleKeyboardMode() {
+        let events = modeManager.toggleKeyboardMode()
+        currentMode = modeManager.currentMode
+        for event in events {
+            handleModeEvent(event)
+        }
+    }
+
+    private func enterKeyboardMode() {
+        keyboardModeActive = true
+        typingSession.start()
+        tapDetector.reset()
+        hoveredKey = nil
+        currentTypedWord = ""
+        predictions = []
+        selectedPredictionIndex = nil
+    }
+
+    private func exitKeyboardMode() {
+        keyboardModeActive = false
+        typingSession.stop()
+        tapDetector.reset()
+        hoveredKey = nil
+        currentTypedWord = ""
+        predictions = []
+        selectedPredictionIndex = nil
     }
 }
 
@@ -107,20 +156,151 @@ extension TrackingPipeline {
             handleModeEvent(event)
         }
 
-        blinkDetector.isEnabled = (currentMode == .normal || currentMode == .commandPalette)
-        headTiltProcessor.isEnabled = (currentMode == .normal)
-
         switch currentMode {
         case .normal, .commandPalette:
+            blinkDetector.isEnabled = true
+            headTiltProcessor.isEnabled = (currentMode == .normal)
             handleNormalTracking(result, profile: profile)
         case .scroll:
+            blinkDetector.isEnabled = false
+            headTiltProcessor.isEnabled = false
             handleScrollMode(result, profile: profile)
         case .dictation:
+            blinkDetector.isEnabled = false
+            headTiltProcessor.isEnabled = false
             handleWinkClicks(result)
+        case .keyboard:
+            blinkDetector.isEnabled = true  // Needed for prediction selection
+            headTiltProcessor.isEnabled = false
+            handleKeyboardMode(result, profile: profile)
         }
 
-        // Process hand gestures (runs alongside all modes)
-        handleGestureEvents(result.gestures, cursorPosition: currentCursorPosition)
+        // Process hand gestures only when NOT in keyboard mode
+        if currentMode != .keyboard {
+            handleGestureEvents(result.gestures, cursorPosition: currentCursorPosition)
+        }
+    }
+
+    // MARK: - Keyboard Mode Frame Handling
+
+    private func handleKeyboardMode(_ result: FrameProcessor.FrameResult, profile: CalibrationProfile) {
+        // Eye tracking continues for cursor (prediction bar selection)
+        let screenPoint = profile.mapToScreen(result.rawGaze)
+        let smoothed = cursorSmoother.smooth(screenPoint)
+        currentCursorPosition = smoothed
+        inputController.moveCursor(to: smoothed)
+
+        // Update prediction bar selection based on gaze position
+        updatePredictionSelection(cursorPosition: smoothed)
+
+        // Process hand data for typing
+        guard let handData = result.hands.first else {
+            hoveredKey = nil
+            return
+        }
+
+        // Check for space gesture: thumb extended, all others curled
+        if handData.fingerStates[.thumb] == .extended &&
+           handData.fingerStates[.index] == .curled &&
+           handData.fingerStates[.middle] == .curled &&
+           handData.fingerStates[.ring] == .curled &&
+           handData.fingerStates[.little] == .curled {
+            typingSession.space()
+            currentTypedWord = typingSession.currentWord
+            predictions = typingSession.currentPredictions()
+            return
+        }
+
+        // Check for backspace: reuse swipe-left gesture detection
+        for gesture in result.gestures {
+            if gesture.type == .swipeLeft && gesture.state == .discrete {
+                typingSession.backspace()
+                currentTypedWord = typingSession.currentWord
+                predictions = typingSession.currentPredictions()
+                return
+            }
+            // Fist gesture = enter
+            if gesture.type == .fist && gesture.state == .began {
+                typingSession.enter()
+                currentTypedWord = typingSession.currentWord
+                predictions = typingSession.currentPredictions()
+                return
+            }
+        }
+
+        // Update hovered key from fingertip position
+        if let indexTip = handData.landmarks[.indexTip] {
+            let screenPos = CGPoint(
+                x: Double(indexTip.x) * profile.screenWidth,
+                y: Double(indexTip.y) * profile.screenHeight
+            )
+            hoveredKey = keyResolver.resolve(
+                fingertipScreenPosition: screenPos,
+                keyboardFrame: keyboardFrame
+            )
+        }
+
+        // Run tap detection
+        if let tapEvent = tapDetector.update(handData: handData) {
+            let screenPos = CGPoint(
+                x: Double(tapEvent.fingertipPosition.x) * profile.screenWidth,
+                y: Double(tapEvent.fingertipPosition.y) * profile.screenHeight
+            )
+            if let key = keyResolver.resolve(fingertipScreenPosition: screenPos, keyboardFrame: keyboardFrame) {
+                if key.label != "space" {
+                    typingSession.typeCharacter(key)
+                    currentTypedWord = typingSession.currentWord
+                    predictions = typingSession.currentPredictions()
+                }
+            }
+        }
+
+        // Handle blink for prediction acceptance
+        let avgEAR = (result.leftEAR + result.rightEAR) / 2.0
+        let clickEvents = blinkDetector.update(ear: avgEAR, timestamp: result.timestamp)
+        for event in clickEvents {
+            switch event {
+            case .leftClick:
+                if let idx = selectedPredictionIndex, idx < predictions.count {
+                    typingSession.acceptPrediction(predictions[idx])
+                    currentTypedWord = typingSession.currentWord
+                    predictions = typingSession.currentPredictions()
+                    selectedPredictionIndex = nil
+                }
+            default:
+                break
+            }
+        }
+
+        // Wink actions still pass through
+        handleWinkClicks(result)
+    }
+
+    private func updatePredictionSelection(cursorPosition: GazePoint) {
+        guard !predictions.isEmpty else {
+            selectedPredictionIndex = nil
+            return
+        }
+
+        // Prediction bar is at the top of the keyboard panel
+        // Each prediction item spans 1/predictions.count of the width
+        let barX = keyboardFrame.origin.x
+        let barY = keyboardFrame.origin.y + keyboardFrame.height  // Above the keyboard
+        let barWidth = keyboardFrame.width
+        let barHeight: CGFloat = 40
+
+        let cursorX = CGFloat(cursorPosition.x)
+        let cursorY = CGFloat(cursorPosition.y)
+
+        // Check if cursor is within prediction bar bounds
+        if cursorX >= barX && cursorX <= barX + barWidth &&
+           cursorY >= barY && cursorY <= barY + barHeight {
+            let relativeX = (cursorX - barX) / barWidth
+            let idx = Int(relativeX * CGFloat(predictions.count))
+            selectedPredictionIndex = min(idx, predictions.count - 1)
+        } else {
+            selectedPredictionIndex = nil
+        }
     }
 
     private func handleNormalTracking(_ result: FrameProcessor.FrameResult, profile: CalibrationProfile) {
@@ -189,9 +369,13 @@ extension TrackingPipeline {
             switch to {
             case .dictation: inputController.triggerDictation()
             case .commandPalette: inputController.triggerSpotlight()
-            case .normal, .scroll: break
+            case .keyboard: enterKeyboardMode()
+            case .normal:
+                if keyboardModeActive { exitKeyboardMode() }
+            case .scroll: break
             }
         case .actionTriggered: break
+        case .keyboardAction: break
         }
     }
 
@@ -200,7 +384,10 @@ extension TrackingPipeline {
         if let lost = faceLostTime, time - lost > faceLostTimeout {
             trackingState = .paused(reason: .faceLost)
             let events = modeManager.handleFaceLost()
-            if !events.isEmpty { currentMode = .normal }
+            if !events.isEmpty {
+                currentMode = .normal
+                if keyboardModeActive { exitKeyboardMode() }
+            }
         }
     }
 
@@ -230,8 +417,6 @@ extension TrackingPipeline {
             case .pinch:
                 switch gesture.state {
                 case .changed(let distance):
-                    // Smaller distance = fingers closing = zoom out
-                    // Map distance changes to zoom direction
                     if distance < 0.015 {
                         inputController.zoom(direction: .zoomIn)
                     } else {
@@ -258,7 +443,6 @@ extension TrackingPipeline {
                 case .began:
                     isPointActive = true
                 case .changed(let encodedPosition):
-                    // Decode fingertip position: x + y * 10000
                     let y = encodedPosition / 10000.0
                     let x = encodedPosition - (y.rounded(.down) * 10000.0)
                     if let profile = calibrationProfile {
@@ -286,7 +470,6 @@ extension TrackingPipeline {
             }
         }
 
-        // Clear active gesture after processing one-shot events
         if gestures.allSatisfy({ $0.state == .discrete || $0.state == .ended }) {
             activeGesture = nil
         }

@@ -26,6 +26,9 @@ struct MenuBarView: View {
             Toggle("Hand Gestures", isOn: Binding(
                 get: { appState.handGesturesEnabled },
                 set: { _ in appState.toggleHandGestures() }))
+            Toggle("Virtual Keyboard", isOn: Binding(
+                get: { appState.keyboardModeEnabled },
+                set: { appState.setKeyboardModeEnabled($0) }))
             Button("Quick Recalibrate") { appState.showCalibration = true }
                 .disabled(!appState.pipeline.isEnabled)
             Divider()
@@ -49,9 +52,21 @@ struct MenuBarView: View {
         }
     }
     private var modeIcon: String {
-        switch appState.pipeline.currentMode { case .normal: "eye"; case .scroll: "scroll"; case .dictation: "mic"; case .commandPalette: "magnifyingglass" }
+        switch appState.pipeline.currentMode {
+        case .normal: "eye"
+        case .scroll: "scroll"
+        case .dictation: "mic"
+        case .commandPalette: "magnifyingglass"
+        case .keyboard: "keyboard"
+        }
     }
     private var modeName: String {
-        switch appState.pipeline.currentMode { case .normal: "Normal"; case .scroll: "Scroll Mode"; case .dictation: "Dictation"; case .commandPalette: "Command Palette" }
+        switch appState.pipeline.currentMode {
+        case .normal: "Normal"
+        case .scroll: "Scroll Mode"
+        case .dictation: "Dictation"
+        case .commandPalette: "Command Palette"
+        case .keyboard: "Keyboard Mode"
+        }
     }
 }
