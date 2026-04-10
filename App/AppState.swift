@@ -13,6 +13,9 @@ public final class AppState: ObservableObject {
     @Published public var hasCompletedOnboarding: Bool
     @Published public var settingsManager = SettingsManager()
 
+    /// Last error from starting/stopping tracking. Nil when everything is fine.
+    @Published public var lastTrackingError: String?
+
     /// Closures wired by AppDelegate to open windows via WindowCoordinator.
     public var openSettingsWindow: (() -> Void)?
     public var openCalibrationWindow: (() -> Void)?
@@ -73,7 +76,14 @@ public final class AppState: ObservableObject {
     }
 
     public func toggleTracking() {
-        do { try pipeline.toggle() } catch { print("Failed to toggle tracking: \(error)") }
+        do {
+            try pipeline.toggle()
+            lastTrackingError = nil
+        } catch {
+            let message = (error as? LocalizedError)?.errorDescription ?? "\(error)"
+            lastTrackingError = message
+            print("Failed to toggle tracking: \(error)")
+        }
     }
 
     public func completeOnboarding() {

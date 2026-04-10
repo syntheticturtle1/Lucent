@@ -10,6 +10,12 @@ struct MenuBarView: View {
                 Circle().fill(statusColor).frame(width: 8, height: 8)
                 Text(statusText).font(.headline)
             }
+            if let error = appState.lastTrackingError {
+                Text(error)
+                    .font(.caption)
+                    .foregroundColor(.red)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             if appState.pipeline.currentMode != .normal {
                 HStack(spacing: 4) {
                     Image(systemName: modeIcon).font(.system(size: 11))
