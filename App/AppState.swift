@@ -13,6 +13,11 @@ public final class AppState: ObservableObject {
     @Published public var hasCompletedOnboarding: Bool
     @Published public var settingsManager = SettingsManager()
 
+    /// Closures wired by AppDelegate to open windows via WindowCoordinator.
+    public var openSettingsWindow: (() -> Void)?
+    public var openCalibrationWindow: (() -> Void)?
+    public var openOnboardingWindow: (() -> Void)?
+
     private var hotkeyRef: EventHotKeyRef?
     private var hudHotkeyRef: EventHotKeyRef?
     private var keyboardHotkeyRef: EventHotKeyRef?

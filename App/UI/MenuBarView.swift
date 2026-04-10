@@ -29,11 +29,12 @@ struct MenuBarView: View {
             Toggle("Virtual Keyboard", isOn: Binding(
                 get: { appState.keyboardModeEnabled },
                 set: { appState.setKeyboardModeEnabled($0) }))
-            Button("Quick Recalibrate") { appState.showCalibration = true }
+            Button("Quick Recalibrate") { appState.openCalibrationWindow?() }
                 .disabled(!appState.pipeline.isEnabled)
             Divider()
-            Button("Settings...") { appState.showSettings = true; NSApp.activate(ignoringOtherApps: true) }
+            Button("Settings...") { appState.openSettingsWindow?() }
                 .keyboardShortcut(",", modifiers: .command)
+            Button("Show Onboarding") { appState.openOnboardingWindow?() }
             Button("Quit Lucent") { NSApplication.shared.terminate(nil) }
                 .keyboardShortcut("q", modifiers: .command)
         }.padding(12).frame(width: 220)
