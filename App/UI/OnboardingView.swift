@@ -133,6 +133,16 @@ struct OnboardingView: View {
                         withAnimation { step = 3 }
                     }
                 }
+
+                Text("Stuck? If Lucent is already toggled on but this won't advance, quit Lucent, remove the Lucent entry in System Settings \u{203A} Accessibility, then relaunch and try again.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 8)
+                    .padding(.top, 8)
+
+                Button("Skip for now") { withAnimation { step = 3 } }
+                    .foregroundColor(.secondary)
             }
         }
     }

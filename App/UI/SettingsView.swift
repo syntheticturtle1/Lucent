@@ -403,7 +403,7 @@ private struct CalibrationTab: View {
         Form {
             Section("Calibration") {
                 Button("Run Full Calibration (9-point)") {
-                    appState.showCalibration = true
+                    appState.openCalibrationWindow?()
                 }
                 .buttonStyle(.borderedProminent)
             }

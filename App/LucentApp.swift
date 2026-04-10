@@ -29,6 +29,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         appState.openSettingsWindow = { [weak self] in self?.coordinator.showSettings() }
         appState.openCalibrationWindow = { [weak self] in self?.coordinator.showCalibration() }
         appState.openOnboardingWindow = { [weak self] in self?.coordinator.showOnboarding() }
+        appState.closeOnboardingWindow = { [weak self] in self?.coordinator.closeOnboarding() }
 
         // On first launch, present the onboarding wizard automatically.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in

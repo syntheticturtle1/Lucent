@@ -17,6 +17,7 @@ public final class AppState: ObservableObject {
     public var openSettingsWindow: (() -> Void)?
     public var openCalibrationWindow: (() -> Void)?
     public var openOnboardingWindow: (() -> Void)?
+    public var closeOnboardingWindow: (() -> Void)?
 
     private var hotkeyRef: EventHotKeyRef?
     private var hudHotkeyRef: EventHotKeyRef?
@@ -78,6 +79,7 @@ public final class AppState: ObservableObject {
     public func completeOnboarding() {
         hasCompletedOnboarding = true
         UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
+        closeOnboardingWindow?()
     }
 
     public func toggleHUDExpanded() {

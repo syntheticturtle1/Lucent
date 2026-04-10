@@ -30,6 +30,11 @@ final class WindowCoordinator: NSObject {
         showOnboarding()
     }
 
+    func closeOnboarding() {
+        onboardingWindow?.close()
+        onboardingWindow = nil
+    }
+
     func showOnboarding() {
         if let existing = onboardingWindow {
             existing.makeKeyAndOrderFront(nil)
@@ -94,23 +99,35 @@ final class WindowCoordinator: NSObject {
     // MARK: - HUD
 
     private func observeHUDState() {
-        // React to tracking state and HUD toggle changes.
-        appState.pipeline.$isEnabled
-            .sink { [weak self] _ in self?.updateHUD() }
+        // React to pipeline state changes (tracking enabled, mode, expressions, etc.).
+        appState.pipeline.objectWillChange
+            .sink { [weak self] _ in
+                DispatchQueue.main.async { self?.updateHUD() }
+            }
             .store(in: &cancellables)
 
+        // React to AppState changes (profile/settings toggles like showHUD).
         appState.objectWillChange
             .sink { [weak self] _ in
                 DispatchQueue.main.async { self?.updateHUD() }
             }
             .store(in: &cancellables)
 
-        // Initial update once the pipeline publishes its starting value.
+        // Safety-net timer: refresh the HUD every 250ms in case a publisher
+        // misses an update. Cheap — just repositions and re-renders an NSPanel.
+        Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.updateHUD() }
+        }
+
+        // Initial update.
         updateHUD()
     }
 
     private func updateHUD() {
-        let shouldShow = appState.showHUD && appState.pipeline.isEnabled
+        // Show the HUD whenever the user has it enabled — even in idle state.
+        // The idle HUD lets the user confirm the app is actually running and
+        // see tracking state transitions.
+        let shouldShow = appState.showHUD
 
         if shouldShow {
             if hudPanel == nil {
