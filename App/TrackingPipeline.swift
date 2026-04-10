@@ -25,6 +25,11 @@ public final class TrackingPipeline: ObservableObject {
     private var isDragging: Bool = false
     private var isPointActive: Bool = false
 
+    /// Called on every frame with the raw (pre-calibration) gaze point.
+    /// Used by the calibration overlay to collect samples while the user
+    /// looks at the 9 target dots.
+    public var onRawGaze: ((GazePoint) -> Void)?
+
     private let cameraManager = CameraManager()
     private let frameProcessor: FrameProcessor
     let blinkDetector = BlinkDetector()
@@ -148,6 +153,10 @@ extension TrackingPipeline {
         // Update hand tracking state
         handDetected = !result.hands.isEmpty
         handCount = result.hands.count
+
+        // Always forward raw gaze samples so an active calibration session
+        // can collect them — must happen BEFORE the early-return below.
+        onRawGaze?(result.rawGaze)
 
         if result.confidence < 0.5 {
             lowConfidenceCount += 1
