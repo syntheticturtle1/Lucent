@@ -13,7 +13,7 @@ struct LucentApp: App {
         }
 
         Window("Welcome to Lucent", id: "wizard") {
-            FirstLaunchWizard(appState: appState)
+            OnboardingView(appState: appState)
         }
         .windowResizability(.contentSize)
         .defaultPosition(.center)

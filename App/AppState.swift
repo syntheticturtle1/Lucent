@@ -11,21 +11,58 @@ public final class AppState: ObservableObject {
     @Published public var showSettings = false
     @Published public var showCalibration = false
     @Published public var hasCompletedOnboarding: Bool
-    @Published public var showHUD: Bool
-    @Published public var hudExpanded: Bool
-    @Published public var handGesturesEnabled: Bool
-    @Published public var keyboardModeEnabled: Bool
+    @Published public var settingsManager = SettingsManager()
 
     private var hotkeyRef: EventHotKeyRef?
     private var hudHotkeyRef: EventHotKeyRef?
     private var keyboardHotkeyRef: EventHotKeyRef?
 
+    /// Convenience accessors backed by the current profile.
+    public var showHUD: Bool {
+        get { settingsManager.currentProfile.showHUD }
+        set {
+            settingsManager.currentProfile.showHUD = newValue
+            settingsManager.saveCurrentProfile()
+            objectWillChange.send()
+        }
+    }
+
+    public var hudExpanded: Bool {
+        get { settingsManager.currentProfile.hudExpanded }
+        set {
+            settingsManager.currentProfile.hudExpanded = newValue
+            settingsManager.saveCurrentProfile()
+            objectWillChange.send()
+        }
+    }
+
+    public var handGesturesEnabled: Bool {
+        get { settingsManager.currentProfile.handGesturesEnabled }
+        set {
+            settingsManager.currentProfile.handGesturesEnabled = newValue
+            settingsManager.saveCurrentProfile()
+            pipeline.handGesturesEnabled = newValue
+            objectWillChange.send()
+        }
+    }
+
+    public var keyboardModeEnabled: Bool {
+        get { settingsManager.currentProfile.keyboardEnabled }
+        set {
+            settingsManager.currentProfile.keyboardEnabled = newValue
+            settingsManager.saveCurrentProfile()
+            if !newValue && pipeline.keyboardModeActive {
+                pipeline.toggleKeyboardMode()
+            }
+            objectWillChange.send()
+        }
+    }
+
     public init() {
         self.hasCompletedOnboarding = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
-        self.showHUD = UserDefaults.standard.object(forKey: "showHUD") as? Bool ?? true
-        self.hudExpanded = UserDefaults.standard.bool(forKey: "hudExpanded")
-        self.handGesturesEnabled = UserDefaults.standard.object(forKey: "handGesturesEnabled") as? Bool ?? true
-        self.keyboardModeEnabled = UserDefaults.standard.object(forKey: "keyboardModeEnabled") as? Bool ?? false
+        // Apply stored profile settings to the pipeline
+        pipeline.applySettings(from: settingsManager)
+        pipeline.handGesturesEnabled = settingsManager.currentProfile.handGesturesEnabled
         registerGlobalHotkeys()
     }
 
@@ -40,13 +77,10 @@ public final class AppState: ObservableObject {
 
     public func toggleHUDExpanded() {
         hudExpanded.toggle()
-        UserDefaults.standard.set(hudExpanded, forKey: "hudExpanded")
     }
 
     public func toggleHandGestures() {
         handGesturesEnabled.toggle()
-        pipeline.handGesturesEnabled = handGesturesEnabled
-        UserDefaults.standard.set(handGesturesEnabled, forKey: "handGesturesEnabled")
     }
 
     public func toggleKeyboardMode() {
@@ -56,10 +90,6 @@ public final class AppState: ObservableObject {
 
     public func setKeyboardModeEnabled(_ enabled: Bool) {
         keyboardModeEnabled = enabled
-        UserDefaults.standard.set(enabled, forKey: "keyboardModeEnabled")
-        if !enabled && pipeline.keyboardModeActive {
-            pipeline.toggleKeyboardMode()  // Exit keyboard mode if disabling
-        }
     }
 
     public var launchAtLogin: Bool {

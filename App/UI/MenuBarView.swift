@@ -22,7 +22,7 @@ struct MenuBarView: View {
                 set: { _ in appState.toggleTracking() }))
             Toggle("Show HUD", isOn: Binding(
                 get: { appState.showHUD },
-                set: { appState.showHUD = $0; UserDefaults.standard.set($0, forKey: "showHUD") }))
+                set: { appState.showHUD = $0 }))
             Toggle("Hand Gestures", isOn: Binding(
                 get: { appState.handGesturesEnabled },
                 set: { _ in appState.toggleHandGestures() }))
