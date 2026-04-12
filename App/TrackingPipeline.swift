@@ -335,25 +335,13 @@ extension TrackingPipeline {
             // reach here, a face was detected — trust it even at low confidence.
             guard result.confidence > 0.05 else { return }
 
-            let screenW = NSScreen.main?.frame.width ?? 1440
-            let screenH = NSScreen.main?.frame.height ?? 900
+            let screenPoint = mapToScreen(result.rawGaze, profile: profile)
 
-            let screenPoint: GazePoint
-            if let profile = profile {
-                screenPoint = profile.mapToScreen(result.rawGaze)
-            } else {
-                // Direct mapping: rawGaze is 0-1 normalized face position.
-                // Scale to screen dimensions for immediate head tracking.
-                screenPoint = GazePoint(
-                    x: result.rawGaze.x * Double(screenW),
-                    y: result.rawGaze.y * Double(screenH)
-                )
-            }
-
-            // Bounds check: don't warp to positions outside the screen.
+            // Clamp to full virtual display bounds (all monitors).
+            let bounds = Self.virtualScreenBounds
             let clamped = GazePoint(
-                x: min(max(screenPoint.x, 0), Double(screenW)),
-                y: min(max(screenPoint.y, 0), Double(screenH))
+                x: min(max(screenPoint.x, Double(bounds.minX)), Double(bounds.maxX)),
+                y: min(max(screenPoint.y, Double(bounds.minY)), Double(bounds.maxY))
             )
 
             let smoothed = cursorSmoother.smooth(clamped)
@@ -430,15 +418,25 @@ extension TrackingPipeline {
         }
     }
 
-    /// Map raw 0-1 gaze to screen coordinates. Uses calibration profile if available,
-    /// otherwise does direct linear mapping (face position → screen position).
+    /// Combined bounding rect of all connected displays in global coordinates.
+    private static var virtualScreenBounds: CGRect {
+        let screens = NSScreen.screens
+        guard !screens.isEmpty else { return CGRect(x: 0, y: 0, width: 1440, height: 900) }
+        return screens.reduce(screens[0].frame) { $0.union($1.frame) }
+    }
+
+    /// Map raw 0-1 gaze to screen coordinates across ALL monitors.
+    /// Uses calibration profile if available, otherwise does direct linear
+    /// mapping (face position → full virtual screen space).
     private func mapToScreen(_ rawGaze: GazePoint, profile: CalibrationProfile?) -> GazePoint {
         if let profile = profile {
             return profile.mapToScreen(rawGaze)
         }
-        let sw = Double(NSScreen.main?.frame.width ?? 1440)
-        let sh = Double(NSScreen.main?.frame.height ?? 900)
-        return GazePoint(x: rawGaze.x * sw, y: rawGaze.y * sh)
+        let bounds = Self.virtualScreenBounds
+        return GazePoint(
+            x: bounds.origin.x + rawGaze.x * Double(bounds.width),
+            y: bounds.origin.y + rawGaze.y * Double(bounds.height)
+        )
     }
 
     private func handleFaceLost(at time: Double) {
