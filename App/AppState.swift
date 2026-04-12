@@ -90,11 +90,17 @@ public final class AppState: ObservableObject {
                 lastTrackingError = nil
             } catch {
                 let message = (error as? LocalizedError)?.errorDescription ?? "\(error)"
-                lastTrackingError = message
+                lastTrackingError = "Camera failed: \(message)"
             }
         } else if !needsCamera && pipeline.isEnabled {
             pipeline.stop()
         }
+    }
+
+    /// Forward pipeline changes to the UI. Called from a timer so the
+    /// menu bar popover updates even though pipeline is a nested ObservableObject.
+    public func refreshPipelineState() {
+        objectWillChange.send()
     }
 
     public func completeOnboarding() {

@@ -35,6 +35,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
             self?.coordinator.showOnboardingIfNeeded()
         }
+
+        // Refresh timer: propagate pipeline state changes to menu bar UI.
+        // Needed because pipeline is a nested ObservableObject.
+        Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.appState.refreshPipelineState() }
+        }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
