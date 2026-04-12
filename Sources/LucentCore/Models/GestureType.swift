@@ -107,13 +107,13 @@ public struct GestureConfig: Codable, Sendable, Equatable {
     public var thumbExtendedAngle: Double
 
     public init(
-        swipeDisplacementX: Double = 0.30,
-        swipeDisplacementY: Double = 0.25,
-        swipeWindowSeconds: Double = 0.5,
-        swipeCooldownSeconds: Double = 0.5,
-        pinchThreshold: Double = 0.03,
-        fistHoldDuration: Double = 0.3,
-        pointHoldDuration: Double = 0.2,
+        swipeDisplacementX: Double = 0.12,
+        swipeDisplacementY: Double = 0.10,
+        swipeWindowSeconds: Double = 0.6,
+        swipeCooldownSeconds: Double = 0.4,
+        pinchThreshold: Double = 0.05,
+        fistHoldDuration: Double = 0.2,
+        pointHoldDuration: Double = 0.15,
         openPalmHoldDuration: Double = 0.5,
         openPalmVelocityThreshold: Double = 0.01,
         fingerExtendedAngle: Double = 150.0,

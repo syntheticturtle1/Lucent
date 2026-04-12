@@ -54,6 +54,12 @@ public final class TrackingPipeline: ObservableObject {
     private let faceLostTimeout: Double = 0.5
     private var lowConfidenceCount = 0
 
+    /// Secondary EMA smoother on top of Kalman for extra jitter reduction.
+    private var emaX: Double = 0
+    private var emaY: Double = 0
+    private var emaInitialized = false
+    private let emaAlpha: Double = 0.15  // Lower = smoother, higher = more responsive
+
     public var cameraDeviceID: String { cameraManager.currentDeviceID ?? "unknown" }
 
     /// Screen-space frame of the keyboard overlay, set by the UI layer.
@@ -62,8 +68,8 @@ public final class TrackingPipeline: ObservableObject {
     public init() {
         let gazeEstimator = MockGazeEstimator()
         self.frameProcessor = FrameProcessor(gazeEstimator: gazeEstimator)
-        // Heavier smoothing for CoreML gaze model which is noisier than head tracking
-        self.cursorSmoother = CursorSmoother(dwellRadius: 40, dwellTime: 0.3, processNoise: 1.0, measurementNoise: 15.0)
+        // Very heavy smoothing — webcam tracking is noisy
+        self.cursorSmoother = CursorSmoother(dwellRadius: 50, dwellTime: 0.4, processNoise: 0.5, measurementNoise: 25.0)
         self.calibrationProfile = try? CalibrationProfile.load()
     }
 
@@ -346,13 +352,22 @@ extension TrackingPipeline {
             )
 
             // Saccade teleport vs smooth head refinement
-            let smoothed: GazePoint
+            let kalmanOut: GazePoint
             if result.isTeleport {
                 cursorSmoother.teleport(to: clamped)
-                smoothed = clamped
+                kalmanOut = clamped
+                emaX = clamped.x; emaY = clamped.y; emaInitialized = true
             } else {
-                smoothed = cursorSmoother.smooth(clamped)
+                kalmanOut = cursorSmoother.smooth(clamped)
             }
+            // Secondary EMA for extra jitter reduction
+            if !emaInitialized {
+                emaX = kalmanOut.x; emaY = kalmanOut.y; emaInitialized = true
+            } else {
+                emaX += emaAlpha * (kalmanOut.x - emaX)
+                emaY += emaAlpha * (kalmanOut.y - emaY)
+            }
+            let smoothed = GazePoint(x: emaX, y: emaY)
             let tiltOffset = headTiltProcessor.process(rollDegrees: result.headRoll)
             let final = GazePoint(x: smoothed.x + tiltOffset.x, y: smoothed.y + tiltOffset.y)
             currentCursorPosition = final
