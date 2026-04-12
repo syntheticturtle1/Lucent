@@ -13,8 +13,8 @@ public final class CoreMLGazeEstimator: GazeEstimating, @unchecked Sendable {
     private let ciContext = CIContext()
 
     /// ±gazeRangeRadians maps to the full screen width/height.
-    /// Smaller = more sensitive. 0.35 rad ≈ ±20° which is comfortable eye range.
-    public var gazeRangeRadians: Double = 0.35
+    /// Larger = less sensitive, more stable. 1.0 rad ≈ ±57°.
+    public var gazeRangeRadians: Double = 1.0
 
     // ImageNet normalization constants
     private let mean: [Float] = [0.485, 0.456, 0.406]  // RGB

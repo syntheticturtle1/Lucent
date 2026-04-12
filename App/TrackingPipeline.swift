@@ -62,7 +62,8 @@ public final class TrackingPipeline: ObservableObject {
     public init() {
         let gazeEstimator = CoreMLGazeEstimator()
         self.frameProcessor = FrameProcessor(gazeEstimator: gazeEstimator)
-        self.cursorSmoother = CursorSmoother()
+        // Heavier smoothing for CoreML gaze model which is noisier than head tracking
+        self.cursorSmoother = CursorSmoother(dwellRadius: 40, dwellTime: 0.3, processNoise: 1.0, measurementNoise: 15.0)
         self.calibrationProfile = try? CalibrationProfile.load()
     }
 
