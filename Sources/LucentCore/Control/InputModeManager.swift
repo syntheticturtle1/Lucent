@@ -4,6 +4,11 @@ public final class InputModeManager: @unchecked Sendable {
     public private(set) var currentMode: InputMode = .normal
     private var scrollHeld = false
 
+    /// When false, expressions don't trigger mode switches (smile→dictation, etc.)
+    /// Only hotkey-based mode changes (Cmd+Shift+K for keyboard) still work.
+    /// Default is OFF because false positives make the app unusable.
+    public var expressionModeSwitchingEnabled = false
+
     public init() {}
 
     /// Toggle keyboard mode on/off. Called from Cmd+Shift+K hotkey handler.
@@ -25,6 +30,17 @@ public final class InputModeManager: @unchecked Sendable {
         var events: [ModeEvent] = []
         let types = Set(expressions.map(\.type))
 
+        // When expression mode switching is disabled, only pass through
+        // wink actions (click events) — never switch modes from expressions.
+        guard expressionModeSwitchingEnabled else {
+            for expression in expressions {
+                if expression.type == .winkLeft || expression.type == .winkRight {
+                    events.append(.actionTriggered(expression.type))
+                }
+            }
+            return events
+        }
+
         // In keyboard mode, suppress expression-based mode changes
         // but still allow wink actions to pass through
         if currentMode == .keyboard {
@@ -33,7 +49,7 @@ public final class InputModeManager: @unchecked Sendable {
                 case .winkLeft, .winkRight:
                     events.append(.actionTriggered(expression.type))
                 default:
-                    break  // Suppress scroll, dictation, command palette triggers
+                    break
                 }
             }
             return events
