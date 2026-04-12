@@ -5,20 +5,26 @@ import CoreImage
 import CoreVideo
 
 /// Real gaze estimator powered by a CoreML L2CS-Net model.
-/// Crops the face from the camera frame, normalizes with ImageNet stats,
-/// runs inference, and maps pitch/yaw angles to screen coordinates.
+/// Auto-centers to the user's natural gaze direction so "looking straight"
+/// always maps to screen center regardless of camera angle or position.
 public final class CoreMLGazeEstimator: GazeEstimating, @unchecked Sendable {
 
     private var mlModel: MLModel?
     private let ciContext = CIContext()
 
-    /// ±gazeRangeRadians maps to the full screen width/height.
-    /// Larger = less sensitive, more stable. 1.0 rad ≈ ±57°.
-    public var gazeRangeRadians: Double = 1.0
+    /// How many radians of eye movement covers the full screen.
+    /// Larger = less sensitive. 0.6 rad ≈ ±34° of gaze range.
+    public var gazeRangeRadians: Double = 0.6
 
-    // ImageNet normalization constants
-    private let mean: [Float] = [0.485, 0.456, 0.406]  // RGB
+    // ImageNet normalization
+    private let mean: [Float] = [0.485, 0.456, 0.406]
     private let std: [Float] = [0.229, 0.224, 0.225]
+
+    // Auto-centering: running average of pitch/yaw to find "neutral" gaze
+    private var centerPitch: Double = 0
+    private var centerYaw: Double = 0
+    private var framesSeen: Int = 0
+    private let warmupFrames: Int = 30  // frames before centering stabilizes
 
     public init() {
         do {
@@ -39,9 +45,8 @@ public final class CoreMLGazeEstimator: GazeEstimating, @unchecked Sendable {
             }
 
             mlModel = try MLModel(contentsOf: compiledURL, configuration: config)
-            print("[CoreMLGazeEstimator] Model loaded successfully")
         } catch {
-            print("[CoreMLGazeEstimator] Failed to load model: \(error)")
+            print("[CoreMLGazeEstimator] Failed: \(error)")
         }
     }
 
@@ -50,11 +55,9 @@ public final class CoreMLGazeEstimator: GazeEstimating, @unchecked Sendable {
             return fallbackEstimate(faceBounds: faceBounds)
         }
 
-        // Crop face from pixel buffer
         let imageW = CGFloat(CVPixelBufferGetWidth(pixelBuffer))
         let imageH = CGFloat(CVPixelBufferGetHeight(pixelBuffer))
 
-        // faceBounds is normalized with origin bottom-left (Vision convention).
         let facePixelRect = CGRect(
             x: faceBounds.origin.x * imageW,
             y: (1.0 - faceBounds.origin.y - faceBounds.height) * imageH,
@@ -62,7 +65,6 @@ public final class CoreMLGazeEstimator: GazeEstimating, @unchecked Sendable {
             height: faceBounds.height * imageH
         )
 
-        // Pad 30% for context around the face
         let pad = max(facePixelRect.width, facePixelRect.height) * 0.3
         let cropRect = facePixelRect.insetBy(dx: -pad, dy: -pad).intersection(
             CGRect(x: 0, y: 0, width: imageW, height: imageH)
@@ -71,7 +73,6 @@ public final class CoreMLGazeEstimator: GazeEstimating, @unchecked Sendable {
             return fallbackEstimate(faceBounds: faceBounds)
         }
 
-        // Render face crop to a 224×224 BGRA pixel buffer
         let ciImage = CIImage(cvPixelBuffer: pixelBuffer).cropped(to: cropRect)
         let translated = ciImage.transformed(by: CGAffineTransform(
             translationX: -cropRect.origin.x, y: -cropRect.origin.y))
@@ -84,12 +85,10 @@ public final class CoreMLGazeEstimator: GazeEstimating, @unchecked Sendable {
         guard let faceBuffer = faceBuf else { return fallbackEstimate(faceBounds: faceBounds) }
         ciContext.render(resized, to: faceBuffer)
 
-        // Convert pixel buffer to ImageNet-normalized MLMultiArray [1, 3, 224, 224]
         guard let inputArray = pixelBufferToNormalizedArray(faceBuffer) else {
             return fallbackEstimate(faceBounds: faceBounds)
         }
 
-        // Run inference
         do {
             let inputFeatures = try MLDictionaryFeatureProvider(
                 dictionary: ["face_crop": MLFeatureValue(multiArray: inputArray)]
@@ -100,13 +99,25 @@ public final class CoreMLGazeEstimator: GazeEstimating, @unchecked Sendable {
                 return fallbackEstimate(faceBounds: faceBounds)
             }
 
-            let pitch = gazeArray[0].doubleValue  // up/down
-            let yaw = gazeArray[1].doubleValue    // left/right
+            let rawPitch = gazeArray[0].doubleValue
+            let rawYaw = gazeArray[1].doubleValue
 
-            // Map angles to 0-1 screen coordinates
-            let range = gazeRangeRadians
-            let gazeX = 0.5 - (yaw / range) * 0.5    // negative yaw = looking right on screen
-            let gazeY = 0.5 - (pitch / range) * 0.5   // negative pitch = looking down
+            // Update auto-center with exponential moving average.
+            // Fast adaptation during warmup, slow drift after.
+            framesSeen += 1
+            let alpha: Double = framesSeen < warmupFrames ? 0.3 : 0.005
+            centerPitch += alpha * (rawPitch - centerPitch)
+            centerYaw += alpha * (rawYaw - centerYaw)
+
+            // Gaze relative to the user's neutral/center position.
+            let relPitch = rawPitch - centerPitch
+            let relYaw = rawYaw - centerYaw
+
+            // Map to 0-1. Try both sign options — the correct mapping
+            // depends on the camera's mirror state and the model's convention.
+            // Front-facing camera: looking right in real life = face moves left in image
+            let gazeX = 0.5 + (relYaw / gazeRangeRadians) * 0.5
+            let gazeY = 0.5 + (relPitch / gazeRangeRadians) * 0.5
 
             return GazePoint(
                 x: min(max(gazeX, 0), 1),
@@ -117,7 +128,7 @@ public final class CoreMLGazeEstimator: GazeEstimating, @unchecked Sendable {
         }
     }
 
-    /// Convert a 224×224 BGRA pixel buffer to an ImageNet-normalized [1,3,224,224] MLMultiArray.
+    /// Convert 224×224 BGRA pixel buffer to ImageNet-normalized [1,3,224,224].
     private func pixelBufferToNormalizedArray(_ buffer: CVPixelBuffer) -> MLMultiArray? {
         CVPixelBufferLockBaseAddress(buffer, .readOnly)
         defer { CVPixelBufferUnlockBaseAddress(buffer, .readOnly) }
@@ -130,7 +141,9 @@ public final class CoreMLGazeEstimator: GazeEstimating, @unchecked Sendable {
             return nil
         }
 
-        // BGRA → RGB, normalize with ImageNet mean/std
+        let dataPtr = array.dataPointer.assumingMemoryBound(to: Float.self)
+        let planeSize = 224 * 224
+
         for y in 0..<224 {
             for x in 0..<224 {
                 let offset = y * bytesPerRow + x * 4
@@ -138,13 +151,10 @@ public final class CoreMLGazeEstimator: GazeEstimating, @unchecked Sendable {
                 let g = Float(ptr[offset + 1]) / 255.0
                 let r = Float(ptr[offset + 2]) / 255.0
 
-                let idx_r = y * 224 + x              // channel 0
-                let idx_g = 224 * 224 + y * 224 + x  // channel 1
-                let idx_b = 2 * 224 * 224 + y * 224 + x  // channel 2
-
-                array[idx_r] = NSNumber(value: (r - mean[0]) / std[0])
-                array[idx_g] = NSNumber(value: (g - mean[1]) / std[1])
-                array[idx_b] = NSNumber(value: (b - mean[2]) / std[2])
+                let idx = y * 224 + x
+                dataPtr[idx] = (r - mean[0]) / std[0]              // R channel
+                dataPtr[planeSize + idx] = (g - mean[1]) / std[1]  // G channel
+                dataPtr[2 * planeSize + idx] = (b - mean[2]) / std[2]  // B channel
             }
         }
 
@@ -152,8 +162,6 @@ public final class CoreMLGazeEstimator: GazeEstimating, @unchecked Sendable {
     }
 
     private func fallbackEstimate(faceBounds: CGRect) -> GazePoint {
-        let headX = 1.0 - Double(faceBounds.midX)
-        let headY = Double(faceBounds.midY)
-        return GazePoint(x: headX, y: headY)
+        return GazePoint(x: 1.0 - Double(faceBounds.midX), y: Double(faceBounds.midY))
     }
 }
