@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import CoreVideo
 
 /// Hybrid head+eye gaze estimator using Apple Vision landmarks.
 ///
@@ -26,7 +27,7 @@ public final class MockGazeEstimator: GazeEstimating, @unchecked Sendable {
 
     public init() {}
 
-    public func estimate(faceBounds: CGRect, leftPupil: CGPoint, rightPupil: CGPoint) -> GazePoint {
+    public func estimate(pixelBuffer: CVPixelBuffer, faceBounds: CGRect, leftPupil: CGPoint, rightPupil: CGPoint) -> GazePoint {
         // --- Coarse: head position ---
         // Face center in normalized image coordinates (0-1).
         // Mirror X so head-right → cursor-right (front-facing camera is flipped).

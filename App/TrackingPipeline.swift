@@ -60,7 +60,7 @@ public final class TrackingPipeline: ObservableObject {
     public var keyboardFrame: CGRect = CGRect(x: 0, y: 0, width: 600, height: 200)
 
     public init() {
-        let gazeEstimator = MockGazeEstimator()
+        let gazeEstimator = CoreMLGazeEstimator()
         self.frameProcessor = FrameProcessor(gazeEstimator: gazeEstimator)
         self.cursorSmoother = CursorSmoother()
         self.calibrationProfile = try? CalibrationProfile.load()

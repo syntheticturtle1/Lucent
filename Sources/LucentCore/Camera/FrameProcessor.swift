@@ -35,6 +35,7 @@ public final class FrameProcessor: @unchecked Sendable {
         guard let face = landmarkDetector.detect(in: pixelBuffer) else { return nil }
 
         let gaze = gazeEstimator.estimate(
+            pixelBuffer: pixelBuffer,
             faceBounds: face.faceBounds,
             leftPupil: face.leftPupil,
             rightPupil: face.rightPupil
