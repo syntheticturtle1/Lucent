@@ -25,48 +25,62 @@ public enum FusionState: Sendable {
 // MARK: - Saccade Detector
 
 /// Detects rapid eye movements (saccades) from pupil positions.
-/// A saccade is a fast jump in pupil-relative-to-face position.
+/// Uses a 3-frame velocity window to distinguish deliberate eye jumps
+/// from noise. A saccade triggers when the pupil moves faster than
+/// the threshold over multiple consecutive frames.
 public final class SaccadeDetector: @unchecked Sendable {
-    /// Minimum pupil velocity (normalized units per frame) to trigger a saccade.
-    public var threshold: Double = 0.08
+    /// Minimum average velocity to trigger a saccade.
+    /// Lower = more sensitive. Vision landmarks are noisy so this
+    /// needs to be above the noise floor (~0.01) but below real
+    /// saccade speed (~0.04+).
+    public var threshold: Double = 0.025
 
     /// Cooldown frames after a saccade before detecting another.
-    public var cooldownFrames: Int = 10
+    public var cooldownFrames: Int = 6
 
-    private var previousRelX: Double?
-    private var previousRelY: Double?
+    /// Ring buffer of recent pupil positions for velocity averaging.
+    private var history: [(x: Double, y: Double)] = []
+    private let historySize = 4
     private var cooldownCounter: Int = 0
 
     public init() {}
 
     public struct Result: Sendable {
         public let detected: Bool
-        /// Where the eyes are looking (normalized 0-1 within face), only valid if detected.
         public let targetRelX: Double
         public let targetRelY: Double
     }
 
-    /// Check if a saccade occurred this frame.
-    /// - Parameters:
-    ///   - relPupilX: Pupil X position within face bounding box (0-1).
-    ///   - relPupilY: Pupil Y position within face bounding box (0-1).
     public func check(relPupilX: Double, relPupilY: Double) -> Result {
         defer {
-            previousRelX = relPupilX
-            previousRelY = relPupilY
+            history.append((relPupilX, relPupilY))
+            if history.count > historySize { history.removeFirst() }
             if cooldownCounter > 0 { cooldownCounter -= 1 }
         }
 
-        guard let prevX = previousRelX, let prevY = previousRelY else {
+        guard history.count >= 2 else {
             return Result(detected: false, targetRelX: relPupilX, targetRelY: relPupilY)
         }
 
-        let dx = relPupilX - prevX
-        let dy = relPupilY - prevY
-        let velocity = (dx * dx + dy * dy).squareRoot()
+        // Average velocity over the last N frames
+        var totalVelocity: Double = 0
+        for i in 1..<history.count {
+            let dx = history[i].x - history[i-1].x
+            let dy = history[i].y - history[i-1].y
+            totalVelocity += (dx * dx + dy * dy).squareRoot()
+        }
+        let avgVelocity = totalVelocity / Double(history.count - 1)
 
-        if velocity > threshold && cooldownCounter == 0 {
+        // Also check the overall displacement (start to end)
+        let first = history.first!
+        let displacement = ((relPupilX - first.x) * (relPupilX - first.x) +
+                           (relPupilY - first.y) * (relPupilY - first.y)).squareRoot()
+
+        // Saccade = high velocity AND significant displacement
+        // (avoids false triggers from jitter which has high velocity but low displacement)
+        if avgVelocity > threshold && displacement > threshold * 1.5 && cooldownCounter == 0 {
             cooldownCounter = cooldownFrames
+            history.removeAll()  // Clear history after saccade
             return Result(detected: true, targetRelX: relPupilX, targetRelY: relPupilY)
         }
 
@@ -74,8 +88,7 @@ public final class SaccadeDetector: @unchecked Sendable {
     }
 
     public func reset() {
-        previousRelX = nil
-        previousRelY = nil
+        history.removeAll()
         cooldownCounter = 0
     }
 }
