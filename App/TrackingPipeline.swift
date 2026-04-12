@@ -159,9 +159,11 @@ extension TrackingPipeline: CameraManagerDelegate {
 
 extension TrackingPipeline {
     private func handleFrame(_ result: FrameProcessor.FrameResult) {
-        faceLostTime = nil
         faceConfidence = result.confidence
         activeExpressions = result.expressions
+
+        // Reset face-lost timer only when face IS detected
+        if result.faceDetected { faceLostTime = nil }
 
         // Update hand tracking state
         handDetected = !result.hands.isEmpty
@@ -185,9 +187,9 @@ extension TrackingPipeline {
             handleModeEvent(event)
         }
 
-        // Only move cursor when eye tracking is enabled.
+        // Only move cursor when eye tracking is enabled AND face is detected.
         // Hand gestures still process below regardless.
-        if eyeTrackingEnabled {
+        if eyeTrackingEnabled && result.faceDetected {
             switch currentMode {
             case .normal, .commandPalette:
                 blinkDetector.isEnabled = true

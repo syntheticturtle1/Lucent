@@ -32,43 +32,63 @@ public final class FrameProcessor: @unchecked Sendable {
         self.gazeEstimator = gazeEstimator
     }
 
+    /// Process a camera frame. Returns a result even if only hands are
+    /// detected (face can be nil). Returns nil only if NOTHING is detected.
     public func process(pixelBuffer: CVPixelBuffer, timestamp: Double) -> FrameResult? {
-        guard let face = landmarkDetector.detect(in: pixelBuffer) else { return nil }
-
-        let fusionResult = gazeEstimator.estimate(
-            pixelBuffer: pixelBuffer,
-            faceBounds: face.faceBounds,
-            leftPupil: face.leftPupil,
-            rightPupil: face.rightPupil
-        )
-        let gaze = fusionResult.position
-
-        let leftEAR = BlinkDetector.computeEAR(eyePoints: face.leftEyePoints)
-        let rightEAR = BlinkDetector.computeEAR(eyePoints: face.rightEyePoints)
-
-        // Expression metrics
-        let smile = ExpressionDetector.smileRatio(outerLipsPoints: face.outerLipsPoints)
-        let mouthOpen = ExpressionDetector.mouthOpenRatio(innerLipsPoints: face.innerLipsPoints)
-
-        let leftEyeTopY = face.leftEyePoints.map(\.y).min() ?? 0
-        let rightEyeTopY = face.rightEyePoints.map(\.y).min() ?? 0
-        let leftBrow = ExpressionDetector.browHeight(browPoints: face.leftBrowPoints, eyeTopY: leftEyeTopY)
-        let rightBrow = ExpressionDetector.browHeight(browPoints: face.rightBrowPoints, eyeTopY: rightEyeTopY)
-        let avgBrowHeight = (leftBrow + rightBrow) / 2.0
-
-        let roll = ExpressionDetector.headRoll(leftPupil: face.leftPupil, rightPupil: face.rightPupil)
-
-        let expressions = expressionDetector.update(
-            leftEAR: leftEAR, rightEAR: rightEAR,
-            smileRatio: smile, browHeight: avgBrowHeight,
-            mouthOpenRatio: mouthOpen, headRoll: roll,
-            timestamp: timestamp
-        )
-
-        // Hand detection + gesture recognition
+        // Run face and hand detection independently
+        let face = landmarkDetector.detect(in: pixelBuffer)
         let detectedHands = handDetector.detect(in: pixelBuffer, timestamp: timestamp)
-        var allGestures: [GestureEvent] = []
 
+        // If neither face nor hands found, nothing to report
+        if face == nil && detectedHands.isEmpty { return nil }
+
+        // Face-dependent processing
+        var gaze = GazePoint(x: 0.5, y: 0.5)
+        var isTeleport = false
+        var leftEAR: Double = 0.3
+        var rightEAR: Double = 0.3
+        var confidence: Float = 0
+        var expressions: [DetectedExpression] = []
+        var headRoll: Double = 0
+        var smile: Double = 0
+        var mouthOpen: Double = 0
+        var avgBrowHeight: Double = 0
+
+        if let face = face {
+            let fusionResult = gazeEstimator.estimate(
+                pixelBuffer: pixelBuffer,
+                faceBounds: face.faceBounds,
+                leftPupil: face.leftPupil,
+                rightPupil: face.rightPupil
+            )
+            gaze = fusionResult.position
+            isTeleport = fusionResult.isTeleport
+
+            leftEAR = BlinkDetector.computeEAR(eyePoints: face.leftEyePoints)
+            rightEAR = BlinkDetector.computeEAR(eyePoints: face.rightEyePoints)
+            confidence = face.confidence
+
+            smile = ExpressionDetector.smileRatio(outerLipsPoints: face.outerLipsPoints)
+            mouthOpen = ExpressionDetector.mouthOpenRatio(innerLipsPoints: face.innerLipsPoints)
+
+            let leftEyeTopY = face.leftEyePoints.map(\.y).min() ?? 0
+            let rightEyeTopY = face.rightEyePoints.map(\.y).min() ?? 0
+            let leftBrow = ExpressionDetector.browHeight(browPoints: face.leftBrowPoints, eyeTopY: leftEyeTopY)
+            let rightBrow = ExpressionDetector.browHeight(browPoints: face.rightBrowPoints, eyeTopY: rightEyeTopY)
+            avgBrowHeight = (leftBrow + rightBrow) / 2.0
+
+            headRoll = ExpressionDetector.headRoll(leftPupil: face.leftPupil, rightPupil: face.rightPupil)
+
+            expressions = expressionDetector.update(
+                leftEAR: leftEAR, rightEAR: rightEAR,
+                smileRatio: smile, browHeight: avgBrowHeight,
+                mouthOpenRatio: mouthOpen, headRoll: headRoll,
+                timestamp: timestamp
+            )
+        }
+
+        // Hand gesture recognition (runs independently of face)
+        var allGestures: [GestureEvent] = []
         if let primaryHand = detectedHands.first {
             let processed = handDetector.processHandObservation(primaryHand)
             allGestures = gestureRecognizer.update(
@@ -83,14 +103,14 @@ public final class FrameProcessor: @unchecked Sendable {
 
         return FrameResult(
             rawGaze: gaze,
-            isTeleport: fusionResult.isTeleport,
+            isTeleport: isTeleport,
             leftEAR: leftEAR,
             rightEAR: rightEAR,
-            faceDetected: true,
-            confidence: face.confidence,
+            faceDetected: face != nil,
+            confidence: confidence,
             timestamp: timestamp,
             expressions: expressions,
-            headRoll: roll,
+            headRoll: headRoll,
             smileRatio: smile,
             browHeight: avgBrowHeight,
             mouthOpenRatio: mouthOpen,
