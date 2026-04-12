@@ -2,65 +2,64 @@ import Foundation
 import CoreGraphics
 import CoreVideo
 
-/// Hybrid head+eye gaze estimator using Apple Vision landmarks.
-///
-/// Two-level tracking:
-/// 1. **Coarse** — face bounding box center positions the cursor in the
-///    general screen region (turn head left → cursor moves left).
-/// 2. **Fine** — pupil position *relative to the face* adjusts within that
-///    region (look left with your eyes → cursor shifts left without moving
-///    your head).
-///
-/// The eye component is amplified because pupil shifts within the face
-/// are small (±0.1 in normalized coords) but represent significant gaze
-/// direction changes.
+/// Vision-landmark-based gaze estimator using pupil position relative to
+/// eye corners for fine eye tracking, combined with face position for
+/// coarse head tracking. Auto-centers to the user's neutral position.
 public final class MockGazeEstimator: GazeEstimating, @unchecked Sendable {
 
-    /// How much eye-within-face movement is amplified relative to head movement.
-    /// Higher = more responsive to eye movement, less head turning needed.
-    public var eyeGain: Double = 2.5
+    /// How much the eye signal is amplified. Higher = more eye-responsive.
+    public var eyeGain: Double = 4.0
 
-    /// Blend between head tracking (0.0) and eye tracking (1.0).
-    /// Default 0.6 = 60% eye, 40% head. Gives responsive eyes with
-    /// head as a coarse anchor.
-    public var eyeWeight: Double = 0.6
+    /// Blend: 0 = pure head, 1 = pure eyes. 0.7 = mostly eyes.
+    public var eyeWeight: Double = 0.7
+
+    // Auto-centering
+    private var centerX: Double = 0.5
+    private var centerY: Double = 0.5
+    private var framesSeen: Int = 0
+    private let warmupFrames: Int = 45
 
     public init() {}
 
     public func estimate(pixelBuffer: CVPixelBuffer, faceBounds: CGRect, leftPupil: CGPoint, rightPupil: CGPoint) -> GazePoint {
-        // --- Coarse: head position ---
-        // Face center in normalized image coordinates (0-1).
-        // Mirror X so head-right → cursor-right (front-facing camera is flipped).
-        let headX = 1.0 - Double(faceBounds.midX)
+        // --- Head position (coarse) ---
+        let headX = 1.0 - Double(faceBounds.midX)  // mirror for front camera
         let headY = Double(faceBounds.midY)
 
-        // --- Fine: eye position relative to face ---
-        // Pupil midpoint in image coords
+        // --- Eye position (fine) ---
+        // Pupil midpoint relative to face bounding box gives eye direction.
+        // When looking left: pupils shift left within the face box.
+        // When looking right: pupils shift right.
         let pupilMidX = Double(leftPupil.x + rightPupil.x) / 2.0
         let pupilMidY = Double(leftPupil.y + rightPupil.y) / 2.0
 
-        // Pupil position relative to the face bounding box (0-1 within the face)
+        let faceMinX = Double(faceBounds.minX)
+        let faceMinY = Double(faceBounds.minY)
         let faceW = max(Double(faceBounds.width), 0.001)
         let faceH = max(Double(faceBounds.height), 0.001)
-        let relPupilX = (pupilMidX - Double(faceBounds.minX)) / faceW
-        let relPupilY = (pupilMidY - Double(faceBounds.minY)) / faceH
 
-        // Offset from face center (0 = looking straight, ±0.2 = looking to the side)
-        // Mirror X for the same front-camera reason.
-        let eyeOffsetX = (0.5 - relPupilX) * eyeGain
-        let eyeOffsetY = (relPupilY - 0.5) * eyeGain
+        // 0-1 within the face bounding box
+        let relX = (pupilMidX - faceMinX) / faceW
+        let relY = (pupilMidY - faceMinY) / faceH
 
-        // The eye component is an offset from the head position.
-        // Normalize the eye position to 0-1 range by treating it as a
-        // displacement around the head position.
-        let eyeX = headX + eyeOffsetX * 0.3   // scale down so it doesn't overshoot
-        let eyeY = headY + eyeOffsetY * 0.3
+        // Offset from center of face, amplified
+        let eyeOffX = (0.5 - relX) * eyeGain  // mirror: pupil left in image = looking right
+        let eyeOffY = (relY - 0.5) * eyeGain
 
-        // Blend head and eye
-        let gazeX = headX * (1.0 - eyeWeight) + eyeX * eyeWeight
-        let gazeY = headY * (1.0 - eyeWeight) + eyeY * eyeWeight
+        // Combine: head anchor + eye offset
+        let rawX = headX * (1.0 - eyeWeight) + (headX + eyeOffX * 0.15) * eyeWeight
+        let rawY = headY * (1.0 - eyeWeight) + (headY + eyeOffY * 0.15) * eyeWeight
 
-        // Clamp to 0-1
+        // Auto-center: learn the user's neutral gaze over time
+        framesSeen += 1
+        let alpha: Double = framesSeen < warmupFrames ? 0.15 : 0.003
+        centerX += alpha * (rawX - centerX)
+        centerY += alpha * (rawY - centerY)
+
+        // Map relative to center: deviation from neutral → screen position
+        let gazeX = 0.5 + (rawX - centerX) * 3.0
+        let gazeY = 0.5 + (rawY - centerY) * 3.0
+
         return GazePoint(
             x: min(max(gazeX, 0), 1),
             y: min(max(gazeY, 0), 1)

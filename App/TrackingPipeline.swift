@@ -60,7 +60,7 @@ public final class TrackingPipeline: ObservableObject {
     public var keyboardFrame: CGRect = CGRect(x: 0, y: 0, width: 600, height: 200)
 
     public init() {
-        let gazeEstimator = CoreMLGazeEstimator()
+        let gazeEstimator = MockGazeEstimator()
         self.frameProcessor = FrameProcessor(gazeEstimator: gazeEstimator)
         // Heavier smoothing for CoreML gaze model which is noisier than head tracking
         self.cursorSmoother = CursorSmoother(dwellRadius: 40, dwellTime: 0.3, processNoise: 1.0, measurementNoise: 15.0)
