@@ -53,6 +53,22 @@ public final class CursorSmoother {
 
     // MARK: - Public API
 
+    /// Teleport the cursor to a new position, resetting all Kalman state.
+    /// Used after a saccade detection so the filter doesn't lag behind.
+    public func teleport(to point: GazePoint) {
+        state = [point.x, point.y, 0, 0]
+        // Reset covariance to moderate values (lower than initial)
+        P = {
+            var p = Array(repeating: Array(repeating: 0.0, count: 4), count: 4)
+            p[0][0] = 50.0; p[1][1] = 50.0; p[2][2] = 25.0; p[3][3] = 25.0
+            return p
+        }()
+        initialized = true
+        isDwelling = false
+        dwellCenter = point
+        dwellEntryTime = Date()
+    }
+
     /// Apply Kalman smoothing, dwell locking, and return a filtered GazePoint.
     public func smooth(_ raw: GazePoint) -> GazePoint {
         // Seed filter on first call

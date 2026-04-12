@@ -50,7 +50,7 @@ public final class CoreMLGazeEstimator: GazeEstimating, @unchecked Sendable {
         }
     }
 
-    public func estimate(pixelBuffer: CVPixelBuffer, faceBounds: CGRect, leftPupil: CGPoint, rightPupil: CGPoint) -> GazePoint {
+    public func estimate(pixelBuffer: CVPixelBuffer, faceBounds: CGRect, leftPupil: CGPoint, rightPupil: CGPoint) -> FusionResult {
         guard let model = mlModel else {
             return fallbackEstimate(faceBounds: faceBounds)
         }
@@ -119,9 +119,9 @@ public final class CoreMLGazeEstimator: GazeEstimating, @unchecked Sendable {
             let gazeX = 0.5 + (relYaw / gazeRangeRadians) * 0.5
             let gazeY = 0.5 + (relPitch / gazeRangeRadians) * 0.5
 
-            return GazePoint(
-                x: min(max(gazeX, 0), 1),
-                y: min(max(gazeY, 0), 1)
+            return FusionResult(
+                position: GazePoint(x: min(max(gazeX, 0), 1), y: min(max(gazeY, 0), 1)),
+                isTeleport: false
             )
         } catch {
             return fallbackEstimate(faceBounds: faceBounds)
@@ -161,7 +161,10 @@ public final class CoreMLGazeEstimator: GazeEstimating, @unchecked Sendable {
         return array
     }
 
-    private func fallbackEstimate(faceBounds: CGRect) -> GazePoint {
-        return GazePoint(x: 1.0 - Double(faceBounds.midX), y: Double(faceBounds.midY))
+    private func fallbackEstimate(faceBounds: CGRect) -> FusionResult {
+        return FusionResult(
+            position: GazePoint(x: 1.0 - Double(faceBounds.midX), y: Double(faceBounds.midY)),
+            isTeleport: false
+        )
     }
 }

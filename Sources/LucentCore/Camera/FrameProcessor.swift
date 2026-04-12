@@ -7,6 +7,7 @@ public final class FrameProcessor: @unchecked Sendable {
 
     public struct FrameResult: Sendable {
         public let rawGaze: GazePoint
+        public let isTeleport: Bool
         public let leftEAR: Double
         public let rightEAR: Double
         public let faceDetected: Bool
@@ -34,12 +35,13 @@ public final class FrameProcessor: @unchecked Sendable {
     public func process(pixelBuffer: CVPixelBuffer, timestamp: Double) -> FrameResult? {
         guard let face = landmarkDetector.detect(in: pixelBuffer) else { return nil }
 
-        let gaze = gazeEstimator.estimate(
+        let fusionResult = gazeEstimator.estimate(
             pixelBuffer: pixelBuffer,
             faceBounds: face.faceBounds,
             leftPupil: face.leftPupil,
             rightPupil: face.rightPupil
         )
+        let gaze = fusionResult.position
 
         let leftEAR = BlinkDetector.computeEAR(eyePoints: face.leftEyePoints)
         let rightEAR = BlinkDetector.computeEAR(eyePoints: face.rightEyePoints)
@@ -81,6 +83,7 @@ public final class FrameProcessor: @unchecked Sendable {
 
         return FrameResult(
             rawGaze: gaze,
+            isTeleport: fusionResult.isTeleport,
             leftEAR: leftEAR,
             rightEAR: rightEAR,
             faceDetected: true,

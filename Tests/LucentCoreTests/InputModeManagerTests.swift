@@ -1,13 +1,19 @@
 import Testing
 @testable import LucentCore
 
+private func makeManager() -> InputModeManager {
+    let m = InputModeManager()
+    m.expressionModeSwitchingEnabled = true
+    return m
+}
+
 @Test func startsInNormalMode() {
     let manager = InputModeManager()
     #expect(manager.currentMode == .normal)
 }
 
 @Test func mouthOpenSwitchesToScroll() {
-    let manager = InputModeManager()
+    let manager = makeManager()
     let events = manager.process(expressions: [
         DetectedExpression(type: .mouthOpen, confidence: 0.8, timestamp: 1.0)
     ])
@@ -16,7 +22,7 @@ import Testing
 }
 
 @Test func mouthCloseExitsScroll() {
-    let manager = InputModeManager()
+    let manager = makeManager()
     _ = manager.process(expressions: [
         DetectedExpression(type: .mouthOpen, confidence: 0.8, timestamp: 1.0)
     ])
@@ -27,7 +33,7 @@ import Testing
 }
 
 @Test func smileTogglesDictation() {
-    let manager = InputModeManager()
+    let manager = makeManager()
     let on = manager.process(expressions: [
         DetectedExpression(type: .smile, confidence: 0.8, timestamp: 1.0)
     ])
@@ -41,7 +47,7 @@ import Testing
 }
 
 @Test func browRaiseTogglesCommandPalette() {
-    let manager = InputModeManager()
+    let manager = makeManager()
     let on = manager.process(expressions: [
         DetectedExpression(type: .browRaise, confidence: 0.8, timestamp: 1.0)
     ])
@@ -70,7 +76,7 @@ import Testing
 }
 
 @Test func faceLostReturnsToNormal() {
-    let manager = InputModeManager()
+    let manager = makeManager()
     _ = manager.process(expressions: [
         DetectedExpression(type: .mouthOpen, confidence: 0.8, timestamp: 1.0)
     ])
@@ -84,4 +90,13 @@ import Testing
     let manager = InputModeManager()
     let events = manager.handleFaceLost()
     #expect(events.isEmpty)
+}
+
+@Test func expressionModeSwitchingDisabledByDefault() {
+    let manager = InputModeManager()
+    let events = manager.process(expressions: [
+        DetectedExpression(type: .smile, confidence: 0.8, timestamp: 1.0)
+    ])
+    #expect(manager.currentMode == .normal, "Should not switch when disabled")
+    #expect(!events.contains(.modeChanged(from: .normal, to: .dictation)))
 }

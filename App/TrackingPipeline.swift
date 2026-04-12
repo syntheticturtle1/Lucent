@@ -345,7 +345,14 @@ extension TrackingPipeline {
                 y: min(max(screenPoint.y, Double(bounds.minY)), Double(bounds.maxY))
             )
 
-            let smoothed = cursorSmoother.smooth(clamped)
+            // Saccade teleport vs smooth head refinement
+            let smoothed: GazePoint
+            if result.isTeleport {
+                cursorSmoother.teleport(to: clamped)
+                smoothed = clamped
+            } else {
+                smoothed = cursorSmoother.smooth(clamped)
+            }
             let tiltOffset = headTiltProcessor.process(rollDegrees: result.headRoll)
             let final = GazePoint(x: smoothed.x + tiltOffset.x, y: smoothed.y + tiltOffset.y)
             currentCursorPosition = final
