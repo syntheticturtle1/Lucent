@@ -24,7 +24,7 @@ struct MenuBarView: View {
             }
             Divider()
             Toggle("Eye Tracking", isOn: Binding(
-                get: { appState.pipeline.isEnabled },
+                get: { appState.pipeline.eyeTrackingEnabled },
                 set: { _ in appState.toggleTracking() }))
             Toggle("Show HUD", isOn: Binding(
                 get: { appState.showHUD },

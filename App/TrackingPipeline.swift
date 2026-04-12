@@ -7,6 +7,8 @@ import LucentCore
 public final class TrackingPipeline: ObservableObject {
     @Published public var trackingState: TrackingState = .idle
     @Published public var isEnabled = false
+    /// When false, camera runs for gestures but cursor doesn't move.
+    @Published public var eyeTrackingEnabled = true
     @Published public var currentCursorPosition = GazePoint.zero
     @Published public var currentMode: InputMode = .normal
     @Published public var activeExpressions: [DetectedExpression] = []
@@ -183,23 +185,27 @@ extension TrackingPipeline {
             handleModeEvent(event)
         }
 
-        switch currentMode {
-        case .normal, .commandPalette:
-            blinkDetector.isEnabled = true
-            headTiltProcessor.isEnabled = (currentMode == .normal)
-            handleNormalTracking(result, profile: calibrationProfile)
-        case .scroll:
-            blinkDetector.isEnabled = false
-            headTiltProcessor.isEnabled = false
-            handleScrollMode(result, profile: calibrationProfile)
-        case .dictation:
-            blinkDetector.isEnabled = false
-            headTiltProcessor.isEnabled = false
-            handleWinkClicks(result)
-        case .keyboard:
-            blinkDetector.isEnabled = true
-            headTiltProcessor.isEnabled = false
-            handleKeyboardMode(result, profile: calibrationProfile)
+        // Only move cursor when eye tracking is enabled.
+        // Hand gestures still process below regardless.
+        if eyeTrackingEnabled {
+            switch currentMode {
+            case .normal, .commandPalette:
+                blinkDetector.isEnabled = true
+                headTiltProcessor.isEnabled = (currentMode == .normal)
+                handleNormalTracking(result, profile: calibrationProfile)
+            case .scroll:
+                blinkDetector.isEnabled = false
+                headTiltProcessor.isEnabled = false
+                handleScrollMode(result, profile: calibrationProfile)
+            case .dictation:
+                blinkDetector.isEnabled = false
+                headTiltProcessor.isEnabled = false
+                handleWinkClicks(result)
+            case .keyboard:
+                blinkDetector.isEnabled = true
+                headTiltProcessor.isEnabled = false
+                handleKeyboardMode(result, profile: calibrationProfile)
+            }
         }
 
         // Process hand gestures only when NOT in keyboard mode

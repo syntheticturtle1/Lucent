@@ -52,6 +52,7 @@ public final class AppState: ObservableObject {
             settingsManager.saveCurrentProfile()
             pipeline.handGesturesEnabled = newValue
             objectWillChange.send()
+            ensurePipelineRunning()
         }
     }
 
@@ -76,13 +77,23 @@ public final class AppState: ObservableObject {
     }
 
     public func toggleTracking() {
-        do {
-            try pipeline.toggle()
-            lastTrackingError = nil
-        } catch {
-            let message = (error as? LocalizedError)?.errorDescription ?? "\(error)"
-            lastTrackingError = message
-            print("Failed to toggle tracking: \(error)")
+        pipeline.eyeTrackingEnabled.toggle()
+        ensurePipelineRunning()
+    }
+
+    /// Start/stop the camera pipeline based on whether anything needs it.
+    private func ensurePipelineRunning() {
+        let needsCamera = pipeline.eyeTrackingEnabled || handGesturesEnabled
+        if needsCamera && !pipeline.isEnabled {
+            do {
+                try pipeline.start()
+                lastTrackingError = nil
+            } catch {
+                let message = (error as? LocalizedError)?.errorDescription ?? "\(error)"
+                lastTrackingError = message
+            }
+        } else if !needsCamera && pipeline.isEnabled {
+            pipeline.stop()
         }
     }
 
