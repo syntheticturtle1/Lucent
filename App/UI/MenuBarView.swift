@@ -10,6 +10,19 @@ struct MenuBarView: View {
                 Circle().fill(statusColor).frame(width: 8, height: 8)
                 Text(statusText).font(.headline)
             }
+            if appState.pipeline.isEnabled {
+                HStack(spacing: 4) {
+                    Image(systemName: "hand.raised").font(.system(size: 11))
+                    Text("Hands: \(appState.pipeline.handCount)")
+                        .font(.caption)
+                    if let gesture = appState.pipeline.activeGesture {
+                        Text("[\(gesture.rawValue)]")
+                            .font(.caption).foregroundColor(.blue)
+                    }
+                }.foregroundColor(.secondary)
+                Text("Frames: \(appState.pipeline.frameCount)")
+                    .font(.caption).foregroundColor(.secondary)
+            }
             if let error = appState.lastTrackingError {
                 Text(error)
                     .font(.caption)
