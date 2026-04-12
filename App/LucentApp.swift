@@ -30,10 +30,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         appState.openCalibrationWindow = { [weak self] in self?.coordinator.showCalibration() }
         appState.openOnboardingWindow = { [weak self] in self?.coordinator.showOnboarding() }
         appState.closeOnboardingWindow = { [weak self] in self?.coordinator.closeOnboarding() }
+        appState.openDashboardWindow = { [weak self] in self?.coordinator.showDashboard() }
 
-        // On first launch, present the onboarding wizard automatically.
+        // On first launch show onboarding, otherwise show dashboard.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
-            self?.coordinator.showOnboardingIfNeeded()
+            if self?.appState.hasCompletedOnboarding == true {
+                self?.coordinator.showDashboard()
+            } else {
+                self?.coordinator.showOnboardingIfNeeded()
+            }
         }
 
         // Refresh timer: propagate pipeline state changes to menu bar UI.

@@ -21,6 +21,7 @@ public final class AppState: ObservableObject {
     public var openCalibrationWindow: (() -> Void)?
     public var openOnboardingWindow: (() -> Void)?
     public var closeOnboardingWindow: (() -> Void)?
+    public var openDashboardWindow: (() -> Void)?
 
     private var hotkeyRef: EventHotKeyRef?
     private var hudHotkeyRef: EventHotKeyRef?
@@ -107,6 +108,10 @@ public final class AppState: ObservableObject {
         hasCompletedOnboarding = true
         UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
         closeOnboardingWindow?()
+        // Open the main dashboard after onboarding
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            self?.openDashboardWindow?()
+        }
     }
 
     public func toggleHUDExpanded() {

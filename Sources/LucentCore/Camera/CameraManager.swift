@@ -8,7 +8,7 @@ public protocol CameraManagerDelegate: AnyObject, Sendable {
 
 public final class CameraManager: NSObject, @unchecked Sendable {
     public weak var delegate: CameraManagerDelegate?
-    private let session = AVCaptureSession()
+    public let session = AVCaptureSession()
     private let outputQueue = DispatchQueue(label: "com.lucent.camera", qos: .userInteractive)
     private var videoOutput: AVCaptureVideoDataOutput?
     public private(set) var isRunning = false

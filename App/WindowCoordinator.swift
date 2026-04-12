@@ -13,6 +13,7 @@ final class WindowCoordinator: NSObject {
     private var onboardingWindow: NSWindow?
     private var settingsWindow: NSWindow?
     private var calibrationWindow: NSWindow?
+    private var dashboardWindow: NSWindow?
 
     private var hudPanel: HUDPanel?
     private var cancellables = Set<AnyCancellable>()
@@ -21,6 +22,28 @@ final class WindowCoordinator: NSObject {
         self.appState = appState
         super.init()
         observeHUDState()
+    }
+
+    // MARK: - Dashboard
+
+    func showDashboard() {
+        if let existing = dashboardWindow {
+            existing.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+        let hosting = NSHostingController(rootView: MainDashboardView(appState: appState))
+        let window = NSWindow(contentViewController: hosting)
+        window.title = "Lucent"
+        window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
+        window.setContentSize(NSSize(width: 700, height: 500))
+        window.minSize = NSSize(width: 600, height: 400)
+        window.center()
+        window.isReleasedWhenClosed = false
+        window.delegate = self
+        dashboardWindow = window
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     // MARK: - Onboarding
@@ -169,6 +192,7 @@ extension WindowCoordinator: NSWindowDelegate {
         if window == onboardingWindow { onboardingWindow = nil }
         if window == settingsWindow { settingsWindow = nil }
         if window == calibrationWindow { calibrationWindow = nil }
+        if window == dashboardWindow { dashboardWindow = nil }
     }
 }
 

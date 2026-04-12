@@ -58,23 +58,22 @@ public final class SaccadeDetector: @unchecked Sendable {
             if cooldownCounter > 0 { cooldownCounter -= 1 }
         }
 
-        guard history.count >= 2 else {
+        guard !history.isEmpty else {
             return Result(detected: false, targetRelX: relPupilX, targetRelY: relPupilY)
         }
 
-        // Average velocity over the last N frames
-        var totalVelocity: Double = 0
-        for i in 1..<history.count {
-            let dx = history[i].x - history[i-1].x
-            let dy = history[i].y - history[i-1].y
-            totalVelocity += (dx * dx + dy * dy).squareRoot()
-        }
-        let avgVelocity = totalVelocity / Double(history.count - 1)
+        // Velocity between last known position and current
+        let last = history.last!
+        let dx = relPupilX - last.x
+        let dy = relPupilY - last.y
+        let instantVelocity = (dx * dx + dy * dy).squareRoot()
 
-        // Also check the overall displacement (start to end)
+        // Overall displacement from oldest entry to current
         let first = history.first!
         let displacement = ((relPupilX - first.x) * (relPupilX - first.x) +
                            (relPupilY - first.y) * (relPupilY - first.y)).squareRoot()
+
+        let avgVelocity = instantVelocity
 
         // Saccade = high velocity AND significant displacement
         // (avoids false triggers from jitter which has high velocity but low displacement)

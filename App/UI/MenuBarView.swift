@@ -51,6 +51,9 @@ struct MenuBarView: View {
             Button("Quick Recalibrate") { appState.openCalibrationWindow?() }
                 .disabled(!appState.pipeline.isEnabled)
             Divider()
+            Button("Open Dashboard") { appState.openDashboardWindow?() }
+                .keyboardShortcut("d", modifiers: .command)
+            Divider()
             Button("Settings...") { appState.openSettingsWindow?() }
                 .keyboardShortcut(",", modifiers: .command)
             Button("Show Onboarding") { appState.openOnboardingWindow?() }

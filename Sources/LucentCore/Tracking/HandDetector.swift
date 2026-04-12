@@ -38,18 +38,33 @@ public final class HandDetector: @unchecked Sendable {
     // MARK: - Vision Detection
 
     /// Run VNDetectHumanHandPoseRequest on a pixel buffer and return detected hands.
+    /// Last failure reason for diagnostics.
+    public private(set) var lastFailureReason: String?
+    public private(set) var lastObservationCount: Int = 0
+
     public func detect(in pixelBuffer: CVPixelBuffer, timestamp: Double) -> [HandData] {
         let request = VNDetectHumanHandPoseRequest()
         request.maximumHandCount = 2
 
         do {
-            let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, options: [:])
+            let handler = VNImageRequestHandler(
+                cvPixelBuffer: pixelBuffer,
+                orientation: .up,
+                options: [:]
+            )
             try handler.perform([request])
         } catch {
+            lastFailureReason = "Vision error: \(error.localizedDescription)"
             return []
         }
 
-        guard let observations = request.results else { return [] }
+        guard let observations = request.results else {
+            lastFailureReason = "No results from Vision"
+            lastObservationCount = 0
+            return []
+        }
+        lastObservationCount = observations.count
+        lastFailureReason = observations.isEmpty ? "No hands detected" : nil
 
         let imageWidth = CVPixelBufferGetWidth(pixelBuffer)
         let imageHeight = CVPixelBufferGetHeight(pixelBuffer)
@@ -87,7 +102,7 @@ public final class HandDetector: @unchecked Sendable {
         imageHeight: Int,
         timestamp: Double
     ) -> HandData? {
-        guard observation.confidence > 0.3 else { return nil }
+        guard observation.confidence > 0.15 else { return nil }
 
         var landmarks: [HandJoint: CGPoint] = [:]
 

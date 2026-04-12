@@ -25,7 +25,7 @@ public final class FaceLandmarkDetector: @unchecked Sendable {
         let request = VNDetectFaceLandmarksRequest()
         request.revision = VNDetectFaceLandmarksRequestRevision3
         do {
-            let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, options: [:])
+            let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: .up, options: [:])
             try handler.perform([request])
         } catch {
             lastFailureReason = "Vision error: \(error.localizedDescription)"

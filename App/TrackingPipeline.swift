@@ -35,7 +35,7 @@ public final class TrackingPipeline: ObservableObject {
     /// looks at the 9 target dots.
     public var onRawGaze: ((GazePoint) -> Void)?
 
-    private let cameraManager = CameraManager()
+    public let cameraManager = CameraManager()
     private let frameProcessor: FrameProcessor
     let blinkDetector = BlinkDetector()
     private(set) var cursorSmoother: CursorSmoother
