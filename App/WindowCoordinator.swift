@@ -86,11 +86,15 @@ final class WindowCoordinator: NSObject {
         let hosting = NSHostingController(rootView: CalibrationOverlay(appState: appState))
         let window = NSWindow(contentViewController: hosting)
         window.title = "Calibration"
-        window.styleMask = [.titled, .closable]
-        window.setContentSize(NSSize(width: 800, height: 600))
-        window.center()
+        window.styleMask = [.borderless]
         window.isReleasedWhenClosed = false
         window.delegate = self
+        window.backgroundColor = .black
+        // Fullscreen — cover the entire main display for accurate calibration targets.
+        if let screen = NSScreen.main {
+            window.setFrame(screen.frame, display: true)
+        }
+        window.level = .screenSaver
         calibrationWindow = window
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)

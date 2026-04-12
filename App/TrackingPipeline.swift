@@ -330,8 +330,10 @@ extension TrackingPipeline {
     private func handleNormalTracking(_ result: FrameProcessor.FrameResult, profile: CalibrationProfile?) {
         // During point gesture, fingertip controls cursor — skip eye-gaze cursor
         if !isPointActive {
-            // Safety: only warp cursor when face confidence is reasonable.
-            guard result.confidence > 0.3 else { return }
+            // Safety: only warp cursor when a face is actually detected.
+            // frameProcessor.process() returns nil if no face found, so if we
+            // reach here, a face was detected — trust it even at low confidence.
+            guard result.confidence > 0.05 else { return }
 
             let screenW = NSScreen.main?.frame.width ?? 1440
             let screenH = NSScreen.main?.frame.height ?? 900
