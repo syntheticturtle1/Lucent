@@ -21,7 +21,7 @@ public final class FrameProcessor: @unchecked Sendable {
         public let gestures: [GestureEvent]
     }
 
-    private let landmarkDetector = FaceLandmarkDetector()
+    public let landmarkDetector = FaceLandmarkDetector()
     private let gazeEstimator: any GazeEstimating
     public let expressionDetector = ExpressionDetector()
     private let handDetector = HandDetector()

@@ -140,6 +140,14 @@ struct CalibrationOverlay: View {
                     Text("Samples: \(session.samplesCollected) / \(session.samplesNeeded)")
                         .font(.caption)
                         .foregroundColor(.white.opacity(0.6))
+                    Text("Frames received: \(appState.pipeline.frameCount)")
+                        .font(.caption)
+                        .foregroundColor(.white.opacity(0.6))
+                    if let error = appState.pipeline.trackingError {
+                        Text(error)
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                    }
                     if !appState.pipeline.isEnabled {
                         Text("Tracking is OFF — enable Eye Tracking in the menu bar")
                             .font(.caption)

@@ -1,5 +1,6 @@
 import Foundation
 import AVFoundation
+import AppKit
 import LucentCore
 
 @MainActor
@@ -14,6 +15,8 @@ public final class TrackingPipeline: ObservableObject {
     @Published public var activeGesture: GestureType? = nil
     @Published public var handGesturesEnabled: Bool = true
     @Published public var handCount: Int = 0
+    @Published public var frameCount: Int = 0
+    @Published public var trackingError: String?
 
     // Keyboard mode state
     @Published public var keyboardModeActive: Bool = false
@@ -68,7 +71,7 @@ public final class TrackingPipeline: ObservableObject {
         try cameraManager.start()
         cameraManager.delegate = self
         isEnabled = true
-        trackingState = calibrationProfile != nil ? .tracking : .detecting
+        trackingState = .tracking
     }
 
     public func stop() {
@@ -132,6 +135,7 @@ public final class TrackingPipeline: ObservableObject {
 extension TrackingPipeline: CameraManagerDelegate {
     nonisolated public func cameraManager(_ manager: CameraManager, didOutput pixelBuffer: CVPixelBuffer, timestamp: CMTime) {
         let time = CMTimeGetSeconds(timestamp)
+        Task { @MainActor in frameCount += 1 }
         guard let result = frameProcessor.process(pixelBuffer: pixelBuffer, timestamp: time) else {
             Task { @MainActor in handleFaceLost(at: time) }
             return
@@ -163,10 +167,6 @@ extension TrackingPipeline {
             if lowConfidenceCount > 30 { trackingState = .paused(reason: .poorLighting) }
         } else { lowConfidenceCount = 0 }
 
-        guard let profile = calibrationProfile else {
-            trackingState = .detecting
-            return
-        }
         trackingState = .tracking
 
         let modeEvents = modeManager.process(expressions: result.expressions)
@@ -180,19 +180,19 @@ extension TrackingPipeline {
         case .normal, .commandPalette:
             blinkDetector.isEnabled = true
             headTiltProcessor.isEnabled = (currentMode == .normal)
-            handleNormalTracking(result, profile: profile)
+            handleNormalTracking(result, profile: calibrationProfile)
         case .scroll:
             blinkDetector.isEnabled = false
             headTiltProcessor.isEnabled = false
-            handleScrollMode(result, profile: profile)
+            handleScrollMode(result, profile: calibrationProfile)
         case .dictation:
             blinkDetector.isEnabled = false
             headTiltProcessor.isEnabled = false
             handleWinkClicks(result)
         case .keyboard:
-            blinkDetector.isEnabled = true  // Needed for prediction selection
+            blinkDetector.isEnabled = true
             headTiltProcessor.isEnabled = false
-            handleKeyboardMode(result, profile: profile)
+            handleKeyboardMode(result, profile: calibrationProfile)
         }
 
         // Process hand gestures only when NOT in keyboard mode
@@ -203,9 +203,9 @@ extension TrackingPipeline {
 
     // MARK: - Keyboard Mode Frame Handling
 
-    private func handleKeyboardMode(_ result: FrameProcessor.FrameResult, profile: CalibrationProfile) {
+    private func handleKeyboardMode(_ result: FrameProcessor.FrameResult, profile: CalibrationProfile?) {
         // Eye tracking continues for cursor (prediction bar selection)
-        let screenPoint = profile.mapToScreen(result.rawGaze)
+        let screenPoint = mapToScreen(result.rawGaze, profile: profile)
         let smoothed = cursorSmoother.smooth(screenPoint)
         currentCursorPosition = smoothed
         inputController.moveCursor(to: smoothed)
@@ -250,9 +250,11 @@ extension TrackingPipeline {
 
         // Update hovered key from fingertip position
         if let indexTip = handData.landmarks[.indexTip] {
+            let sw = Double(NSScreen.main?.frame.width ?? 1440)
+            let sh = Double(NSScreen.main?.frame.height ?? 900)
             let screenPos = CGPoint(
-                x: Double(indexTip.x) * profile.screenWidth,
-                y: Double(indexTip.y) * profile.screenHeight
+                x: Double(indexTip.x) * sw,
+                y: Double(indexTip.y) * sh
             )
             hoveredKey = keyResolver.resolve(
                 fingertipScreenPosition: screenPos,
@@ -262,9 +264,11 @@ extension TrackingPipeline {
 
         // Run tap detection
         if let tapEvent = tapDetector.update(handData: handData) {
+            let tapSW = Double(NSScreen.main?.frame.width ?? 1440)
+            let tapSH = Double(NSScreen.main?.frame.height ?? 900)
             let screenPos = CGPoint(
-                x: Double(tapEvent.fingertipPosition.x) * profile.screenWidth,
-                y: Double(tapEvent.fingertipPosition.y) * profile.screenHeight
+                x: Double(tapEvent.fingertipPosition.x) * tapSW,
+                y: Double(tapEvent.fingertipPosition.y) * tapSH
             )
             if let key = keyResolver.resolve(fingertipScreenPosition: screenPos, keyboardFrame: keyboardFrame) {
                 if key.label != "space" {
@@ -323,21 +327,31 @@ extension TrackingPipeline {
         }
     }
 
-    private func handleNormalTracking(_ result: FrameProcessor.FrameResult, profile: CalibrationProfile) {
+    private func handleNormalTracking(_ result: FrameProcessor.FrameResult, profile: CalibrationProfile?) {
         // During point gesture, fingertip controls cursor — skip eye-gaze cursor
         if !isPointActive {
             // Safety: only warp cursor when face confidence is reasonable.
-            // Prevents cursor hijacking from noisy / garbage gaze data.
             guard result.confidence > 0.3 else { return }
 
-            let screenPoint = profile.mapToScreen(result.rawGaze)
+            let screenW = NSScreen.main?.frame.width ?? 1440
+            let screenH = NSScreen.main?.frame.height ?? 900
+
+            let screenPoint: GazePoint
+            if let profile = profile {
+                screenPoint = profile.mapToScreen(result.rawGaze)
+            } else {
+                // Direct mapping: rawGaze is 0-1 normalized face position.
+                // Scale to screen dimensions for immediate head tracking.
+                screenPoint = GazePoint(
+                    x: result.rawGaze.x * Double(screenW),
+                    y: result.rawGaze.y * Double(screenH)
+                )
+            }
 
             // Bounds check: don't warp to positions outside the screen.
-            let screenW = profile.screenWidth
-            let screenH = profile.screenHeight
             let clamped = GazePoint(
-                x: min(max(screenPoint.x, 0), screenW),
-                y: min(max(screenPoint.y, 0), screenH)
+                x: min(max(screenPoint.x, 0), Double(screenW)),
+                y: min(max(screenPoint.y, 0), Double(screenH))
             )
 
             let smoothed = cursorSmoother.smooth(clamped)
@@ -364,22 +378,24 @@ extension TrackingPipeline {
         handleWinkClicks(result)
     }
 
-    private func handleScrollMode(_ result: FrameProcessor.FrameResult, profile: CalibrationProfile) {
-        let screenPoint = profile.mapToScreen(result.rawGaze)
-        let vertCenter = profile.screenHeight / 2.0
-        let vertDead = profile.screenHeight * 0.1
+    private func handleScrollMode(_ result: FrameProcessor.FrameResult, profile: CalibrationProfile?) {
+        let screenW = Double(NSScreen.main?.frame.width ?? 1440)
+        let screenH = Double(NSScreen.main?.frame.height ?? 900)
+        let screenPoint = mapToScreen(result.rawGaze, profile: profile)
+        let vertCenter = screenH / 2.0
+        let vertDead = screenH * 0.1
         let vertOffset = screenPoint.y - vertCenter
         var scrollY: Int32 = 0
         if abs(vertOffset) > vertDead {
-            let speed = (abs(vertOffset) - vertDead) / (profile.screenHeight / 2.0)
+            let speed = (abs(vertOffset) - vertDead) / (screenH / 2.0)
             scrollY = Int32(speed * -10.0 * (vertOffset > 0 ? 1 : -1))
         }
-        let horizCenter = profile.screenWidth / 2.0
-        let horizDead = profile.screenWidth * 0.1
+        let horizCenter = screenW / 2.0
+        let horizDead = screenW * 0.1
         let horizOffset = screenPoint.x - horizCenter
         var scrollX: Int32 = 0
         if abs(horizOffset) > horizDead {
-            let speed = (abs(horizOffset) - horizDead) / (profile.screenWidth / 2.0)
+            let speed = (abs(horizOffset) - horizDead) / (screenW / 2.0)
             scrollX = Int32(speed * 10.0 * (horizOffset > 0 ? 1 : -1))
         }
         if scrollY != 0 || scrollX != 0 { inputController.scroll(deltaY: scrollY, deltaX: scrollX) }
@@ -412,7 +428,19 @@ extension TrackingPipeline {
         }
     }
 
+    /// Map raw 0-1 gaze to screen coordinates. Uses calibration profile if available,
+    /// otherwise does direct linear mapping (face position → screen position).
+    private func mapToScreen(_ rawGaze: GazePoint, profile: CalibrationProfile?) -> GazePoint {
+        if let profile = profile {
+            return profile.mapToScreen(rawGaze)
+        }
+        let sw = Double(NSScreen.main?.frame.width ?? 1440)
+        let sh = Double(NSScreen.main?.frame.height ?? 900)
+        return GazePoint(x: rawGaze.x * sw, y: rawGaze.y * sh)
+    }
+
     private func handleFaceLost(at time: Double) {
+        trackingError = frameProcessor.landmarkDetector.lastFailureReason
         if faceLostTime == nil { faceLostTime = time }
         if let lost = faceLostTime, time - lost > faceLostTimeout {
             trackingState = .paused(reason: .faceLost)
@@ -478,17 +506,14 @@ extension TrackingPipeline {
                 case .changed(let encodedPosition):
                     let y = encodedPosition / 10000.0
                     let x = encodedPosition - (y.rounded(.down) * 10000.0)
-                    if let profile = calibrationProfile {
-                        let screenPoint = GazePoint(
-                            x: x * profile.screenWidth,
-                            y: y * profile.screenHeight
-                        )
-                        currentCursorPosition = screenPoint
-                        if isDragging {
-                            inputController.dragMove(to: screenPoint)
-                        } else {
-                            inputController.moveCursor(to: screenPoint)
-                        }
+                    let sw = Double(NSScreen.main?.frame.width ?? 1440)
+                    let sh = Double(NSScreen.main?.frame.height ?? 900)
+                    let screenPoint = GazePoint(x: x * sw, y: y * sh)
+                    currentCursorPosition = screenPoint
+                    if isDragging {
+                        inputController.dragMove(to: screenPoint)
+                    } else {
+                        inputController.moveCursor(to: screenPoint)
                     }
                 case .ended:
                     isPointActive = false

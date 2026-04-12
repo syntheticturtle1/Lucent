@@ -16,6 +16,9 @@ public struct FaceData: Sendable {
 }
 
 public final class FaceLandmarkDetector: @unchecked Sendable {
+    /// Reason for last detection failure — helps diagnose camera/Vision issues.
+    public private(set) var lastFailureReason: String?
+
     public init() {}
 
     public func detect(in pixelBuffer: CVPixelBuffer) -> FaceData? {
@@ -24,9 +27,19 @@ public final class FaceLandmarkDetector: @unchecked Sendable {
         do {
             let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, options: [:])
             try handler.perform([request])
-        } catch { return nil }
+        } catch {
+            lastFailureReason = "Vision error: \(error.localizedDescription)"
+            return nil
+        }
 
-        guard let face = request.results?.first, let landmarks = face.landmarks else { return nil }
+        guard let face = request.results?.first else {
+            lastFailureReason = "No face found (results: \(request.results?.count ?? 0))"
+            return nil
+        }
+        guard let landmarks = face.landmarks else {
+            lastFailureReason = "Face found but no landmarks (confidence: \(face.confidence))"
+            return nil
+        }
         guard let leftEye = landmarks.leftEye, let rightEye = landmarks.rightEye,
               let leftPupil = landmarks.leftPupil, let rightPupil = landmarks.rightPupil else { return nil }
 
