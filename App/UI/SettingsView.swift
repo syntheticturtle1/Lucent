@@ -406,6 +406,9 @@ private struct CalibrationTab: View {
                     appState.openCalibrationWindow?()
                 }
                 .buttonStyle(.borderedProminent)
+                Text("After calibration, use \u{2318}\u{21E7}L to toggle tracking off if the cursor misbehaves.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
 
             Section("Head Tilt") {

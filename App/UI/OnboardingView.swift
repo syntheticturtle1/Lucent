@@ -245,10 +245,6 @@ struct OnboardingView: View {
 
             Button("Start Using Lucent") {
                 appState.completeOnboarding()
-                // Automatically enable tracking so the user sees something happen.
-                if !appState.pipeline.isEnabled {
-                    appState.toggleTracking()
-                }
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)

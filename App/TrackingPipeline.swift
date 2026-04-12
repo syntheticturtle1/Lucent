@@ -326,8 +326,21 @@ extension TrackingPipeline {
     private func handleNormalTracking(_ result: FrameProcessor.FrameResult, profile: CalibrationProfile) {
         // During point gesture, fingertip controls cursor — skip eye-gaze cursor
         if !isPointActive {
+            // Safety: only warp cursor when face confidence is reasonable.
+            // Prevents cursor hijacking from noisy / garbage gaze data.
+            guard result.confidence > 0.3 else { return }
+
             let screenPoint = profile.mapToScreen(result.rawGaze)
-            let smoothed = cursorSmoother.smooth(screenPoint)
+
+            // Bounds check: don't warp to positions outside the screen.
+            let screenW = profile.screenWidth
+            let screenH = profile.screenHeight
+            let clamped = GazePoint(
+                x: min(max(screenPoint.x, 0), screenW),
+                y: min(max(screenPoint.y, 0), screenH)
+            )
+
+            let smoothed = cursorSmoother.smooth(clamped)
             let tiltOffset = headTiltProcessor.process(rollDegrees: result.headRoll)
             let final = GazePoint(x: smoothed.x + tiltOffset.x, y: smoothed.y + tiltOffset.y)
             currentCursorPosition = final
